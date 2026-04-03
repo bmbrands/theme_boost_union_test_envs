@@ -2,7 +2,7 @@
 environment: "env.local.yml"
 repos:
   moodle_docker:
-    url: "https://github.com/eloquenza/moodle-docker"
+    url: "https://github.com/moodlehq/moodle-docker"
 adapters:
   moodle:
     downloader:

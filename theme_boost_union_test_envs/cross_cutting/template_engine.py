@@ -35,12 +35,19 @@ class TemplateEngine:
         template_path: Path,
         test_environment_base_path: Path,
         plugin_install_path: str,
+        moodle_version: str,
     ) -> None:
+        from ..domain.moodle_version_utils import uses_public_webroot
+
         docker_customisation_file = template_path / "local.yml"
+        # Moodle 5.1+ moved web-served code (themes, mods, blocks, ...) into
+        # public/, so plugin mounts must be prefixed accordingly.
+        webroot_prefix = "public/" if uses_public_webroot(moodle_version) else ""
         substitutes = {
             "REPLACE_PLUGIN_SOURCE_PATH": test_environment_base_path
             / plugin_install_path,
             "REPLACE_PLUGIN_INSTALL_DIR": plugin_install_path,
+            "REPLACE_WEBROOT_PREFIX": webroot_prefix,
         }
         template = Template(docker_customisation_file.read_text())
         replaced_strings = template.substitute(substitutes)

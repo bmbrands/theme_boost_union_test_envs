@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from ..cross_cutting import config, log, template_engine, yaml_parser
+from ..domain.moodle_version_utils import uses_public_webroot
 from ..exceptions import MoodleTestEnvironmentDoesNotExistYetError
 
 
@@ -119,6 +120,9 @@ class TestContainer:
         short_name = f"{self.infrastructure} - {self.version}"
         full_name = short_name
         summary = short_name
+        # Moodle 5.1+ serves from public/ — only web-accessible scripts live
+        # there; CLI scripts remain at the Moodle root.
+        webroot_prefix = "public/" if uses_public_webroot(self.version) else ""
         # create the correct tables on the database server
         self._run_local_php_script(
             "admin/cli/install_database.php",
@@ -126,8 +130,8 @@ class TestContainer:
         )
         # allow plugins to hook up last needed operations
         self._run_postcondition_scripts_for_specific_plugins()
-        # add some test data
-        self._run_local_php_script("smartdata.php", "")
+        # add some test data (smartdata.php is a web script, lives in public/ for 5.1+)
+        self._run_local_php_script(f"{webroot_prefix}smartdata.php", "")
 
     def _run_postcondition_scripts_for_specific_plugins(self) -> None:
         plugin = yaml_parser().infrastructure_info(self.infrastructure)["plugin"]

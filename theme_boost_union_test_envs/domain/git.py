@@ -76,5 +76,5 @@ def clone_moodle_docker_repo() -> GitRepository:
     return GitRepository(
         config().moodle_docker_repo_url,
         config().moodle_docker_dir,
-        GitReference("master", GitReferenceType.BRANCH),
+        GitReference("main", GitReferenceType.BRANCH),
     )

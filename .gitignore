@@ -112,3 +112,6 @@ site/
 
 # our default PWD given in the config
 example_pwd/
+
+# Apple filesystem metadata
+.DS_Store

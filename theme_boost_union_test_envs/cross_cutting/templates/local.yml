@@ -2,4 +2,4 @@ version: "2"
 services:
   webserver:
     volumes:
-      - "$REPLACE_PLUGIN_SOURCE_PATH:/var/www/html/$REPLACE_PLUGIN_INSTALL_DIR:cached"
+      - "$REPLACE_PLUGIN_SOURCE_PATH:/var/www/html/$REPLACE_WEBROOT_PREFIX$REPLACE_PLUGIN_INSTALL_DIR:cached"
