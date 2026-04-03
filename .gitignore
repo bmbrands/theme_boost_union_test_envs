@@ -115,3 +115,6 @@ example_pwd/
 
 # Apple filesystem metadata
 .DS_Store
+
+# Frontend build artifacts
+moodle-provisioner-frontend
