@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from ..cross_cutting import config, log, template_engine
+from ..domain.moodle_version_utils import uses_public_webroot
 from ..exceptions import MoodleTestEnvironmentDoesNotExistYetError
 
 
@@ -117,6 +118,9 @@ class TestContainer:
         short_name = f"{self.infrastructure} - {self.version}"
         full_name = short_name
         summary = short_name
+        # Moodle 5.1+ serves from public/ — only web-accessible scripts live
+        # there; CLI scripts remain at the Moodle root.
+        webroot_prefix = "public/" if uses_public_webroot(self.version) else ""
         # create the correct tables on the database server
         self._run_local_php_script(
             "admin/cli/install_database.php",
@@ -127,8 +131,8 @@ class TestContainer:
             "admin/cli/cfg.php",
             "--name=theme --set=boost_union",
         )
-        # add some test data
-        self._run_local_php_script("smartdata.php", "")
+        # add some test data (smartdata.php is a web script, lives in public/ for 5.1+)
+        self._run_local_php_script(f"{webroot_prefix}smartdata.php", "")
 
     def _extract_from_env(self, var_name: str) -> str:
         """Extracts the value of the given variable name from the container's environment file.

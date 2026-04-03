@@ -30,11 +30,19 @@ class TemplateEngine:
             config().overview_page_index.write_text(rendered_text)
 
     def docker_customisation(
-        self, template_path: Path, boost_union_source_dir: Path
+        self, template_path: Path, boost_union_source_dir: Path, moodle_version: str
     ) -> None:
+        from ..domain.moodle_version_utils import uses_public_webroot
+
         docker_customisation_file = template_path / "local.yml"
+        # Moodle 5.1+ moved themes into public/theme/
+        if uses_public_webroot(moodle_version):
+            theme_mount = "/var/www/html/public/theme/boost_union"
+        else:
+            theme_mount = "/var/www/html/theme/boost_union"
         substitutes = {
             "REPLACE_BOOST_UNION_SOURCE_PATH": boost_union_source_dir,
+            "REPLACE_THEME_MOUNT_PATH": theme_mount,
         }
         template = Template(docker_customisation_file.read_text())
         replaced_strings = template.substitute(substitutes)

@@ -6,6 +6,7 @@ from .git import (
     clone_moodle_docker_repo,
 )
 from .moodle import MoodleCache, MoodleDownloader, moodle_cache
+from .moodle_version_utils import uses_public_webroot
 from .test_container import TestContainer
 from .test_infrastructure import TestInfrastructure
 from .testbed import Testbed

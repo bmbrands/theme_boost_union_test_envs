@@ -4,6 +4,7 @@ from typing import Any
 
 from ..cross_cutting import config, log, template_engine
 from ..domain import TestContainer, moodle_cache
+from ..domain.moodle_version_utils import uses_public_webroot
 from ..domain.git import GitReference, clone_boost_union_repo
 from ..exceptions import VersionArgumentNeededError
 
@@ -86,14 +87,21 @@ class TestInfrastructure:
                 new_moodle_test_env / "config.docker-template.php",
                 moodle_source_path / "config.php",
             )
-            # copy datagenerator into moodle root
+            # For Moodle 5.1+, the web root is moodle/public/ so scripts
+            # served by Apache must live inside that subdirectory.
+            if uses_public_webroot(version_nr):
+                webroot_path = moodle_source_path / "public"
+            else:
+                webroot_path = moodle_source_path
+            # copy datagenerator into the web root
             shutil.copy(
                 config().moodle_cache_dir / "smartdata.php",
-                moodle_source_path / "smartdata.php",
+                webroot_path / "smartdata.php",
             )
             self.template_engine.docker_customisation(
                 new_moodle_test_env,
                 self.directory / config().boost_union_base_directory_name,
+                version_nr,
             )
             self.template_engine.environment_file(
                 new_moodle_test_env, self.directory.name, version_nr

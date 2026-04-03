@@ -4,7 +4,7 @@ repos:
   boost_union:
     url: "https://github.com/moodle-an-hochschulen/moodle-theme_boost_union"
   moodle_docker:
-    url: "https://github.com/eloquenza/moodle-docker"
+    url: "https://github.com/moodlehq/moodle-docker"
 adapters:
   moodle:
     downloader:
