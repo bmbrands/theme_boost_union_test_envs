@@ -1,55 +1,136 @@
 # Installation
 
-Currently, the only way to install "theme_boost_union_test_envs" is by acquiring it's source code and installing it directly.
-There are no plans to change this, as this application was developed to aid the ongoing development of the "Boost Union" theme for Moodle.
-There is no reason to have this application listed in a centralizedpackage installer like pip.
+## Prerequisites
 
-You will, however, need a working Python installation.
-The [Python installation guide][] can guide you through the process.
+- **Python 3.11+**
+- **Docker** and **Docker Compose**
+- **Git**
+- **Conda** (recommended for Python version management)
 
-## From source
+### Why Conda?
 
-The source for theme_boost_union_test_envs can be downloaded from
-the [Github repo][].
+Conda ensures you have the exact Python version (3.11) regardless of your system Python. It isolates the project's dependencies in a virtual environment without interfering with other Python projects.
 
-You can either clone the public repository:
+## Setup
 
-```shell
+```bash
+# 1. Clone the repository
 git clone git://github.com/eloquenza/theme_boost_union_test_envs
-```
 
-Or download the [tarball][] and extract it's sources:
-
-```shell
-curl -OJL https://github.com/eloquenza/theme_boost_union_test_envs/tarball/master
-```
-
-Next, make sure [poetry](https://python-poetry.org/docs/) and [conda](https://docs.conda.io/projects/miniconda/en/latest/) (either anaconda or miniconda is fine, or your preferred virtualenv tool) are installed.
-
-Once you have a copy of the source, you should acquire the needed dependencies.
-To not pollute your live system, you should create a virtual environment for python, and install the needed dependencies to run `boost-union-envs`:
-
-```shell
+# 2. Create and activate the conda environment
 conda create -n boost-union-envs python=3.11
 conda activate boost-union-envs
+
+# 3. Install Poetry (Python package manager)
+pip install poetry
+
+# 4. Install project dependencies
 poetry install
+
+# 5. Deactivate when done
+conda deactivate
 ```
 
-Afterwards, you can just run:
+Afterwards, you can run:
 
-```shell
+```bash
 ./boost-union-envs
 ```
 
-This will present you with a help screen, which should - hopefully sufficiently enough - describe most commands.
+This will present you with a help screen describing all available commands.
 
-The next time you want to run this application, just make sure to enter your virtualenv, if not already done so:
+The next time you want to run the application, activate the conda environment first:
 
-```shell
+```bash
 conda activate boost-union-envs
 ```
 
+## Configuration
 
-  [Python installation guide]: http://docs.python-guide.org/en/latest/starting/installation/
-  [Github repo]: https://github.com/eloquenza/theme_boost_union_test_envs
-  [tarball]: https://github.com/eloquenza/theme_boost_union_test_envs/tarball/master
+Edit `env.local.yml` to set your working directory and Nginx settings:
+
+```yaml
+working_dir: "./my_testbed"
+proxied: no
+nginx:
+  base_url: "localhost"
+  cert_chain_path: ""
+  cert_key_path: ""
+  overview_page_path: ""
+  softlinked_nginx_config_path: ""
+```
+
+Set `proxied: yes` for production servers with Nginx reverse proxy and HTTPS (requires cert paths).
+
+## Environment Configuration (`env.local.yml` / `env.prod.yml`)
+
+The tool supports **two environment configurations** that control how and where test environments are deployed. Which file is active is determined by a single line in `config.yml`:
+
+```yaml
+# config.yml
+environment: "env.local.yml"
+```
+
+Change this value to switch environments:
+
+```yaml
+environment: "env.prod.yml"
+```
+
+### How It Works Internally
+
+1. `app.py` reads the `environment` key from `config.yml` and resolves it to a file path
+2. That path is injected into `ApplicationConfigManager` (in `cross_cutting/configuration.py`)
+3. `ApplicationConfigManager` parses the YAML and exposes settings like `working_dir`, `base_url`, `is_proxied`, certificate paths, etc.
+
+All downstream code (template engine, nginx config generation, Docker environment files) uses these settings — it never reads the environment file directly.
+
+### `env.local.yml` — Local Development
+
+Used for running test environments on your own machine (the default):
+
+```yaml
+working_dir: "./example_pwd"
+proxied: no
+nginx:
+  base_url: "localhost"
+  cert_chain_path: ""
+  cert_key_path: ""
+  overview_page_path: ""
+  softlinked_nginx_config_path: ""
+```
+
+- `proxied: no` — Moodle is accessed directly via `localhost:<port>`
+- No certificates or Nginx reverse proxy needed
+- `overview_page_path` and `softlinked_nginx_config_path` can be empty
+
+### `env.prod.yml` — Production Server
+
+Used for deploying test environments behind an Nginx reverse proxy with HTTPS (e.g. on a Plesk server):
+
+```yaml
+working_dir: "./example_pwd"
+proxied: yes
+nginx:
+  base_url: "focused-cray.92-205-184-244.plesk.page"
+  cert_chain_path: "/etc/letsencrypt/live/.../fullchain.pem"
+  cert_key_path: "/etc/letsencrypt/live/.../privkey.pem"
+  overview_page_path: "/var/www/vhosts/.../httpdocs"
+  softlinked_nginx_config_path: "/etc/nginx/plesk.conf.d/vhosts/boost_union"
+```
+
+- `proxied: yes` — Enables reverse proxy mode with `plesk_production_nginx.conf` template
+- `base_url` — The public hostname; Moodle URLs become `https://base_url/infra/version`
+- `cert_chain_path` / `cert_key_path` — TLS certificate paths (e.g. Let's Encrypt)
+- `overview_page_path` — Where the auto-generated `index.html` overview page is placed
+- `softlinked_nginx_config_path` — Path where the generated nginx configs are symlinked so Nginx picks them up
+
+### Key Differences
+
+| Setting | `env.local.yml` | `env.prod.yml` |
+|:--------|:-----------------|:----------------|
+| `proxied` | `no` | `yes` |
+| URL format | `http://localhost:<random_port>` | `https://base_url/infra/version` |
+| Nginx template | `moodle_nginx.conf` (local) | `plesk_production_nginx.conf` |
+| TLS certificates | Not needed | Required |
+| Overview page | Local `index.html` in working dir | Copied to `overview_page_path` on server |
