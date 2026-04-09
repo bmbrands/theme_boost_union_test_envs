@@ -6,5 +6,4 @@
 
 ## Contributors
 
-None other yet.
-Do you wanna be the first?
+* Bas Brands <bas@sonsbeekmedia.nl>
