@@ -1,4 +1,5 @@
 from collections.abc import MutableMapping
+from datetime import datetime
 from typing import Any, cast
 
 import yaml
@@ -36,6 +37,7 @@ class InfrastructureYAMLParser:
         data = {
             infrastructure_name: {
                 "git_ref": {"type": git_ref_type, "reference": git_ref},
+                "created_at": datetime.now().isoformat(),
                 "moodles": {},
             }
         }
