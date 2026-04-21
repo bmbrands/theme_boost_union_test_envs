@@ -1,4 +1,5 @@
 import shutil
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -132,6 +133,7 @@ class TestInfrastructure:
                 "admin_pw": pw,
                 "www_port": port,
                 "db_port": db_port,
+                "created_at": datetime.now().isoformat(),
             }
             self.template_engine.moodle_nginx_config(
                 self.directory.name, version_nr, port

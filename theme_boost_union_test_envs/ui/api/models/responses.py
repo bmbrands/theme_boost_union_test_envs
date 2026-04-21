@@ -8,12 +8,14 @@ class MoodleContainerResponse(BaseModel):
     admin_password: str
     www_port: str
     db_port: str
+    created_at: str
 
 
 class InfrastructureResponse(BaseModel):
     name: str
     git_ref_type: str
     git_ref_reference: str
+    created_at: str
     moodles: list[MoodleContainerResponse]
 
 
