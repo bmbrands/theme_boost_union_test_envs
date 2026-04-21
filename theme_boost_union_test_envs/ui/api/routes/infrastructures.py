@@ -1,4 +1,7 @@
+from typing import Literal
+
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, Field
 
 from theme_boost_union_test_envs.cross_cutting import yaml_parser
 from ..models import InfrastructureListResponse, InfrastructureResponse, MoodleContainerResponse
@@ -10,6 +13,19 @@ def _get_core():
     """Get the BoostUnionTestEnvCore singleton from the DI container."""
     from theme_boost_union_test_envs.app import Application
     return Application().core()
+
+
+class CreateInfrastructureRequest(BaseModel):
+    name: str = Field(..., min_length=1, description="Unique infrastructure name")
+    git_ref_type: Literal["branch", "tag", "commit", "pr"]
+    git_ref: str = Field(..., min_length=1, description="Branch/tag name, commit SHA or PR number")
+    moodle_versions: list[str] = Field(..., min_length=1, description="Moodle versions to build")
+
+
+class CreateInfrastructureResponse(BaseModel):
+    status: str
+    message: str
+    name: str
 
 
 @router.get("", response_model=InfrastructureListResponse)
@@ -51,6 +67,59 @@ def list_infrastructures() -> InfrastructureListResponse:
         )
 
     return InfrastructureListResponse(infrastructures=infrastructures)
+
+
+@router.post("", response_model=CreateInfrastructureResponse)
+def create_infrastructure(payload: CreateInfrastructureRequest) -> CreateInfrastructureResponse:
+    """Create a new infrastructure and build Moodle containers for it.
+
+    Equivalent to running:
+
+        boost-union-envs setup <name> <git_ref_type> <git_ref>
+        boost-union-envs build <name> <moodle_version> [<moodle_version> ...]
+    """
+    # Import here to avoid importing GitPython at module load time.
+    from theme_boost_union_test_envs.domain.git import GitReference, GitReferenceType
+    from theme_boost_union_test_envs.exceptions import (
+        InfrastructureDoesNotExistYetError,
+        InvalidMoodleVersionError,
+        NameAlreadyTakenError,
+        TestbedDoesNotExistYetError,
+        UnsupportedMoodleVersionError,
+    )
+
+    core = _get_core()
+
+    # PRs are passed as ints in the domain layer.
+    ref: str | int = payload.git_ref
+    if payload.git_ref_type == "pr":
+        try:
+            ref = int(payload.git_ref)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail="PR reference must be numeric") from e
+
+    try:
+        git_ref = GitReference(ref, GitReferenceType(payload.git_ref_type))
+        core.setup_infrastructure(payload.name, git_ref)
+        core.build_infrastructure(payload.name, *payload.moodle_versions)
+    except NameAlreadyTakenError as e:
+        raise HTTPException(status_code=409, detail=f"Infrastructure '{payload.name}' already exists") from e
+    except TestbedDoesNotExistYetError as e:
+        raise HTTPException(status_code=412, detail="Testbed has not been initialised yet. Run `init` first.") from e
+    except InfrastructureDoesNotExistYetError as e:
+        raise HTTPException(status_code=500, detail="Infrastructure disappeared during build") from e
+    except UnsupportedMoodleVersionError as e:
+        raise HTTPException(status_code=400, detail=f"Unsupported Moodle version: {e.version}") from e
+    except InvalidMoodleVersionError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid Moodle version: {e.version}") from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+    return CreateInfrastructureResponse(
+        status="ok",
+        message=f"Infrastructure {payload.name} created with {len(payload.moodle_versions)} container(s)",
+        name=payload.name,
+    )
 
 
 @router.post("/{name}/{version}/start")
