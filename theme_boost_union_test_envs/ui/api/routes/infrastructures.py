@@ -91,6 +91,8 @@ def list_infrastructures() -> InfrastructureListResponse:
                 git_ref_reference=str(git_ref.get("reference", "")),
                 created_at=data.get("created_at", ""),
                 moodles=moodles,
+                provisioning_phase=prov.get("phase") if prov else None,
+                provisioning_error=prov.get("error") if prov else None,
             )
         )
 
@@ -116,10 +118,19 @@ def list_infrastructures() -> InfrastructureListResponse:
                     )
                     for v in prov["moodle_versions"]
                 ],
+                provisioning_phase=prov.get("phase"),
+                provisioning_error=prov.get("error"),
             )
         )
 
     return InfrastructureListResponse(infrastructures=infrastructures)
+
+
+def _set_phase(name: str, phase: str) -> None:
+    with _provisioning_lock:
+        entry = _provisioning.get(name)
+        if entry is not None:
+            entry["phase"] = phase
 
 
 def _run_provisioning(name: str, git_ref_type: str, ref: str | int, moodle_versions: list[str]) -> None:
@@ -133,12 +144,16 @@ def _run_provisioning(name: str, git_ref_type: str, ref: str | int, moodle_versi
     try:
         core = _get_core()
         git_ref = GitReference(ref, GitReferenceType(git_ref_type))
+        _set_phase(name, "cloning")
         core.setup_infrastructure(name, git_ref)
+        _set_phase(name, "building")
         core.build_infrastructure(name, *moodle_versions)
+        _set_phase(name, "finalizing")
     except Exception as e:  # noqa: BLE001 - we must record any failure
         with _provisioning_lock:
             if name in _provisioning:
                 _provisioning[name]["error"] = str(e)
+                _provisioning[name]["phase"] = "error"
         return
 
     with _provisioning_lock:
@@ -184,6 +199,7 @@ def create_infrastructure(
             "git_ref_reference": payload.git_ref,
             "moodle_versions": list(payload.moodle_versions),
             "created_at": datetime.now(timezone.utc).isoformat(),
+            "phase": "queued",
         }
 
     background_tasks.add_task(
@@ -215,11 +231,14 @@ def _run_build_only(name: str, moodle_versions: list[str]) -> None:
     """Background worker that builds additional containers for an existing infra."""
     try:
         core = _get_core()
+        _set_phase(name, "building")
         core.build_infrastructure(name, *moodle_versions)
+        _set_phase(name, "finalizing")
     except Exception as e:  # noqa: BLE001 - record any failure
         with _provisioning_lock:
             if name in _provisioning:
                 _provisioning[name]["error"] = str(e)
+                _provisioning[name]["phase"] = "error"
         return
 
     with _provisioning_lock:
@@ -261,6 +280,7 @@ def add_containers(
                 "git_ref_reference": str(git_ref.get("reference", "")),
                 "moodle_versions": list(payload.moodle_versions),
                 "created_at": existing[name].get("created_at", ""),
+                "phase": "queued",
             }
 
     background_tasks.add_task(_run_build_only, name, list(payload.moodle_versions))
