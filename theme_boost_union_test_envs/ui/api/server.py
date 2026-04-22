@@ -1,7 +1,13 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .routes import infrastructures_router, moodle_router, plugins_router
+from .routes import (
+    audit_router,
+    infrastructures_router,
+    moodle_router,
+    plugins_router,
+    settings_router,
+)
 
 
 def create_app() -> FastAPI:
@@ -25,6 +31,8 @@ def create_app() -> FastAPI:
     app.include_router(infrastructures_router)
     app.include_router(plugins_router)
     app.include_router(moodle_router)
+    app.include_router(audit_router)
+    app.include_router(settings_router)
 
     return app
 
