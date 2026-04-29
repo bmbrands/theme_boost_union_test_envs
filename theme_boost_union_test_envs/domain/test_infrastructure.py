@@ -125,11 +125,9 @@ class TestInfrastructure:
             host, port, pw, db_port = container.get_access_info()
             built_moodles[version_nr] = {
                 "status": "CREATED",
-                "url": (
-                    f"https://{host}"
-                    if config().is_proxied
-                    else f"http://{host}:{port}"
-                ),
+                "url": f"{config().scheme}://{host}"
+                if config().is_proxied
+                else f"http://{host}:{port}",
                 "admin_pw": pw,
                 "www_port": port,
                 "db_port": db_port,

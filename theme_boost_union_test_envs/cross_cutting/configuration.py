@@ -24,6 +24,9 @@ PKEY_PATH = "cert_key_path"
 HTML_PATH = "overview_page_path"
 PROXY = "proxied"
 SOFTLINKED_DIR = "softlinked_nginx_config_path"
+TEMPLATE = "template"
+SCHEME = "scheme"
+DEFAULT_PRODUCTION_TEMPLATE = "plesk_production_nginx.conf"
 
 
 class ApplicationConfigManager:
@@ -62,18 +65,27 @@ class ApplicationConfigManager:
         self.base_url = environment[NGINX][WWW_BASE]
         # implicitly truthy as python transforms yes and no
         self.is_proxied = environment[PROXY]
-        # if we are setting up new test environments behind a proxy, these NEED # to be set so the reverse proxy will actually work correct
-        if self.is_proxied and (
-            not environment[NGINX][CERT_PATH]
-            or not environment[NGINX][PKEY_PATH]
-            or not environment[NGINX][HTML_PATH]
-        ):
+        # if we are setting up new test environments behind a proxy, the
+        # overview page path is needed so the docroot is known. SSL cert
+        # paths are only required by templates that actually terminate TLS
+        # in nginx (e.g. plesk); hosts that put TLS in front (e.g. ngrok
+        # in front of `nucky`) may leave them empty.
+        if self.is_proxied and not environment[NGINX][HTML_PATH]:
             raise BoostUnionTestEnvValueError(
-                "Certificate file paths as well as path for the overview webpage must be set"
+                "overview_page_path must be set when proxied is enabled"
             )
         # do not try to provide a default here, no sensible option left
         self.cert_chain_path = environment[NGINX][CERT_PATH]
         self.cert_key_path = environment[NGINX][PKEY_PATH]
+        # which production nginx template the overview vhost should be
+        # generated from. Backwards compatible: defaults to the plesk one.
+        self.production_nginx_template = (
+            environment[NGINX].get(TEMPLATE) or DEFAULT_PRODUCTION_TEMPLATE
+        )
+        # scheme used in stored Moodle URLs when the deployment is proxied.
+        # Defaults to https for backwards compatibility (plesk + letsencrypt).
+        # Set to "http" for setups without TLS (e.g. nucky on the LAN).
+        self.scheme = environment[NGINX].get(SCHEME) or "https"
         # default to working_dir/index.html; allows for debugging it
         self.overview_page_path = (
             self.working_dir

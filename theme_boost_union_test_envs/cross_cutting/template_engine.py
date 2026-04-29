@@ -1,6 +1,7 @@
 import secrets
 import socket
 import string
+import subprocess
 from collections import defaultdict
 from contextlib import closing
 from pathlib import Path
@@ -41,17 +42,61 @@ class TemplateEngine:
 
         docker_customisation_file = template_path / "local.yml"
         # Moodle 5.1+ moved web-served code (themes, mods, blocks, ...) into
-        # public/, so plugin mounts must be prefixed accordingly.
-        webroot_prefix = "public/" if uses_public_webroot(moodle_version) else ""
+        # public/, so plugin mounts must be prefixed accordingly. The same
+        # public/ shift also moves Apache's docroot.
+        if uses_public_webroot(moodle_version):
+            webroot_prefix = "public/"
+            docroot = "/var/www/html/public"
+        else:
+            webroot_prefix = ""
+            docroot = "/var/www/html"
+        # When running behind a path-based reverse proxy, also mount an
+        # Apache Alias snippet into the container so the prefixed URI
+        # resolves to the docroot, and force the runtime
+        # MOODLE_DOCKER_WEB_PORT empty so wwwroot does not get a stray
+        # ":<port>" appended.
+        if config().is_proxied:
+            location = self._extract_proxy_location(template_path, moodle_version)
+            apache_conf = template_path / "apache-prefix.conf"
+            apache_template = self.template_path / "apache-prefix.conf"
+            apache_conf.write_text(
+                Template(apache_template.read_text()).safe_substitute(
+                    {
+                        "REPLACE_LOCATION": location,
+                        "REPLACE_DOCROOT": docroot,
+                    }
+                )
+            )
+            # Mount the Apache Alias snippet AND force the runtime
+            # MOODLE_DOCKER_WEB_PORT empty so the in-container Moodle
+            # config does not append the host bind port to wwwroot.
+            proxy_overrides = (
+                '      - "./apache-prefix.conf:'
+                '/etc/apache2/conf-enabled/moodle-prefix.conf:ro"\n'
+                "    environment:\n"
+                '      MOODLE_DOCKER_WEB_PORT: ""'
+            )
+        else:
+            proxy_overrides = ""
         substitutes = {
             "REPLACE_PLUGIN_SOURCE_PATH": test_environment_base_path
             / plugin_install_path,
             "REPLACE_PLUGIN_INSTALL_DIR": plugin_install_path,
             "REPLACE_WEBROOT_PREFIX": webroot_prefix,
+            "REPLACE_PROXY_OVERRIDES": proxy_overrides,
         }
         template = Template(docker_customisation_file.read_text())
-        replaced_strings = template.substitute(substitutes)
+        # safe_substitute so any stray $-tokens in YAML comments
+        # (e.g. references to compose env vars) do not raise KeyError.
+        replaced_strings = template.safe_substitute(substitutes)
         docker_customisation_file.write_text(replaced_strings)
+
+    def _extract_proxy_location(
+        self, template_path: Path, moodle_version: str
+    ) -> str:
+        # template_path is .../<infrastructure>/moodles/<version>
+        infrastructure_name = template_path.parent.parent.name
+        return f"{infrastructure_name}/{moodle_version}"
 
     def environment_file(
         self, template_path: Path, infrastructure_name: str, moodle_version: str
@@ -61,12 +106,16 @@ class TemplateEngine:
             infrastructure_name, moodle_version
         )
         web_host = self._create_web_url(infrastructure_name, moodle_version)
+        # Bind the published webserver port on all interfaces so the container is
+        # reachable from the LAN (and not only from the docker host's loopback).
+        # moodle-docker-compose otherwise prepends "127.0.0.1:" automatically.
+        web_port_with_bind_ip = f"0.0.0.0:{self._find_free_port()}"
         substitutes = {
             "REPLACE_COMPOSE_NAME": compose_safe_name,
             "REPLACE_MOODLE_SOURCE_PATH": f"{template_path / 'moodle'}",
             "REPLACE_PASSWORD": self._create_new_admin_pw(),
             "REPLACE_MOODLE_WEB_HOST": web_host,
-            "REPLACE_MOODLE_WEB_PORT": self._find_free_port(),
+            "REPLACE_MOODLE_WEB_PORT": web_port_with_bind_ip,
             "REPLACE_MOODLE_DB_PORT": self._find_free_port(),
             "REPLACE_MOODLE_DOCKER_PHP_VERSION": self._select_fitting_docker_image_tag(
                 moodle_version
@@ -77,7 +126,7 @@ class TemplateEngine:
         env_file.write_text(replaced_strings)
 
     def overview_nginx_config(self) -> None:
-        nginx_conf_template = self.template_path / "plesk_production_nginx.conf"
+        nginx_conf_template = self.template_path / config().production_nginx_template
         substitutes = {
             "REPLACE_BASE_URL": config().base_url,
             "REPLACE_CERT_PATH": config().cert_chain_path,
@@ -114,6 +163,27 @@ class TemplateEngine:
             infrastructure_name, moodle_version
         )
         new_config.write_text(replaced_strings)
+        # The host nginx caches the resolved set of include-globs at config
+        # parse time, so a new conf file does not become active until the
+        # service is reloaded. Best effort — fail quiet if not running on a
+        # systemd host or the binary is missing.
+        self._reload_nginx_if_available()
+
+    def _reload_nginx_if_available(self) -> None:
+        for cmd in (
+            ["systemctl", "reload", "nginx"],
+            ["nginx", "-s", "reload"],
+        ):
+            try:
+                result = subprocess.run(
+                    cmd, capture_output=True, text=True, timeout=10
+                )
+            except (FileNotFoundError, subprocess.TimeoutExpired):
+                continue
+            if result.returncode == 0:
+                log().info(f"reloaded nginx via: {' '.join(cmd)}")
+                return
+        log().info("nginx reload skipped (binary unavailable or not running)")
 
     def _create_web_url(
         self,

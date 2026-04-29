@@ -110,6 +110,11 @@ class TestContainer:
         """
         www_host = self._extract_from_env("MOODLE_DOCKER_WEB_HOST")
         www_port = self._extract_from_env("MOODLE_DOCKER_WEB_PORT")
+        # MOODLE_DOCKER_WEB_PORT may be in "bind_ip:port" form (e.g. "0.0.0.0:47833")
+        # because moodle-docker-compose otherwise prepends 127.0.0.1 — keep only the port
+        # for the user-facing URL.
+        if ":" in www_port:
+            www_port = www_port.rsplit(":", 1)[1]
         admin_password = self._extract_from_env("MOODLE_ADMIN_PASSWORD")
         db_port = self._extract_from_env("MOODLE_DOCKER_DB_PORT")
         return (www_host, www_port, admin_password, db_port)
