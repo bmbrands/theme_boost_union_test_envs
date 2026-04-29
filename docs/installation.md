@@ -15,7 +15,8 @@ Conda ensures you have the exact Python version (3.11) regardless of your system
 
 ```bash
 # 1. Clone the repository
-git clone git://github.com/eloquenza/theme_boost_union_test_envs
+git clone --branch feature/fastapi git@github.com:bmbrands/theme_boost_union_test_envs.git
+git clone --branch dev git@github.com:bmbrands/moodle-provisioner-frontend.git
 
 # 2. Create and activate the conda environment
 conda create -n boost-union-envs python=3.11

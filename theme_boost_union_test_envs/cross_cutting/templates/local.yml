@@ -3,3 +3,4 @@ services:
   webserver:
     volumes:
       - "$REPLACE_BOOST_UNION_SOURCE_PATH:$REPLACE_THEME_MOUNT_PATH:cached"
+$REPLACE_PROXY_OVERRIDES
