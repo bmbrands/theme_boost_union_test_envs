@@ -126,6 +126,14 @@ class TestContainer:
         # Moodle 5.1+ serves from public/ — only web-accessible scripts live
         # there; CLI scripts remain at the Moodle root.
         webroot_prefix = "public/" if uses_public_webroot(self.version) else ""
+        # When a TLS-terminating proxy (ngrok, Plesk, etc.) sits in front of
+        # the host nginx, Moodle's stock config.docker-template.php builds
+        # wwwroot as "http://..." which causes mixed-content failures
+        # (broken CSS/JS) and 303-redirect loops. Patch config.php in the
+        # container to use the configured scheme and enable sslproxy, before
+        # running install_database so the install sees the correct wwwroot.
+        if config().is_proxied and config().scheme == "https":
+            self._patch_config_for_https_proxy()
         # create the correct tables on the database server
         self._run_local_php_script(
             "admin/cli/install_database.php",
@@ -138,6 +146,26 @@ class TestContainer:
         )
         # add some test data (smartdata.php is a web script, lives in public/ for 5.1+)
         self._run_local_php_script(f"{webroot_prefix}smartdata.php", "")
+
+    def _patch_config_for_https_proxy(self) -> None:
+        """Force https://-wwwroot and sslproxy=true in the container's
+        config.php. Idempotent: a second invocation is a no-op."""
+        # Match the literal line emitted by moodle-docker's
+        # config.docker-template.php and rewrite it. The grep guard makes
+        # the patch idempotent across container restarts and re-installs.
+        php = (
+            'if grep -q "sslproxy = true" /var/www/html/config.php; then '
+            "  exit 0; "
+            "fi; "
+            "sed -i "
+            r'''"s|\$CFG->wwwroot   = \"http://{\$host}\";'''
+            r'''|\$CFG->wwwroot = \"https://{\$host}\"; \$CFG->sslproxy = true;|" '''
+            "/var/www/html/config.php"
+        )
+        log().info(
+            f"patching config.php in {self.infrastructure}/{self.version} for https proxy"
+        )
+        self._run_docker_command(f"exec -T webserver bash -c '{php}'")
 
     def _extract_from_env(self, var_name: str) -> str:
         """Extracts the value of the given variable name from the container's environment file.
