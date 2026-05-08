@@ -149,14 +149,13 @@ class TestContainer:
 
     def _patch_config_for_https_proxy(self) -> None:
         """Force https://-wwwroot and sslproxy=true in the container's
-        config.php. Idempotent: a second invocation is a no-op."""
-        # Match the literal line emitted by moodle-docker's
-        # config.docker-template.php and rewrite it. The grep guard makes
-        # the patch idempotent across container restarts and re-installs.
+        config.php. Idempotent: sed's pattern only matches the unpatched
+        http:// line, so a second invocation is a no-op."""
+        # Match the literal http://{$host} line emitted by moodle-docker's
+        # config.docker-template.php and rewrite it. Don't grep for
+        # "sslproxy = true" beforehand: that string is also present in the
+        # unrelated gitpod branch, so it falsely reports "already patched".
         php = (
-            'if grep -q "sslproxy = true" /var/www/html/config.php; then '
-            "  exit 0; "
-            "fi; "
             "sed -i "
             r'''"s|\$CFG->wwwroot   = \"http://{\$host}\";'''
             r'''|\$CFG->wwwroot = \"https://{\$host}\"; \$CFG->sslproxy = true;|" '''
