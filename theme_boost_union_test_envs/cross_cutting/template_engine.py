@@ -95,7 +95,10 @@ class TemplateEngine:
     def moodle_nginx_config(
         self, infrastructure_name: str, moodle_version: str, port: str
     ) -> None:
-        from ..domain.moodle_version_utils import uses_public_webroot
+        from ..domain.moodle_version_utils import (
+            image_auto_serves_public_webroot,
+            uses_public_webroot,
+        )
 
         nginx_conf_template = self.template_path / "moodle_nginx.conf"
         # get only "path" from the fqdn, we don't need the domain name, called
@@ -105,11 +108,19 @@ class TemplateEngine:
             config().base_url
             + "/"
         )[2]
-        # Moodle 5.1+ serves its web entrypoint from moodle/public/. We
-        # proxy_pass directly into that subdirectory in the container so the
-        # external URL stays at /<infra>/<version>/ and Moodle does not need
-        # to issue any relative "./public/" redirects.
-        proxy_subpath = "public/" if uses_public_webroot(moodle_version) else ""
+        # Moodle 5.1 serves its web entrypoint from moodle/public/ but the
+        # moodle-docker image used for 5.1 (php-apache:8.3) does not auto-set
+        # APACHE_DOCUMENT_ROOT, so Apache keeps DocumentRoot=/var/www/html and
+        # we must proxy into the public/ subpath ourselves. From Moodle 5.2
+        # the newer image (php-apache:8.4) ships an entrypoint script that
+        # detects /var/www/html/public and sets DocumentRoot accordingly, so
+        # we proxy to "/" and let the container serve directly from public/.
+        if uses_public_webroot(moodle_version) and not image_auto_serves_public_webroot(
+            moodle_version
+        ):
+            proxy_subpath = "public/"
+        else:
+            proxy_subpath = ""
         substitutes = {
             "REPLACE_LOCATION": location,
             "REPLACE_PORT": port,
