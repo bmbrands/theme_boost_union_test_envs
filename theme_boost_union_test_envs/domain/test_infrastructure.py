@@ -99,6 +99,19 @@ class TestInfrastructure:
                 new_moodle_test_env / "config.docker-template.php",
                 moodle_source_path / "config.php",
             )
+            # When running behind the Plesk reverse proxy the external URL is
+            # https://<base_url>/<infra>/<version>/, but moodle-docker's
+            # config.docker-template.php derives $CFG->wwwroot from
+            # MOODLE_DOCKER_WEB_HOST + ":<port>", which is wrong in our setup
+            # (port is internal only and the host already contains the
+            # subpath). Append explicit overrides so Moodle generates correct
+            # absolute URLs and trusts the X-Forwarded-Proto header.
+            if config().is_proxied:
+                self._append_proxy_overrides_to_config_php(
+                    moodle_source_path / "config.php",
+                    self.directory.name,
+                    version_nr,
+                )
             # For Moodle 5.1+, the web root is moodle/public/ so scripts
             # served by Apache must live inside that subdirectory.
             if uses_public_webroot(version_nr):
@@ -162,6 +175,32 @@ class TestInfrastructure:
 
     def _get_moodles_dir(self) -> Path:
         return self.directory / "moodles"
+
+    def _append_proxy_overrides_to_config_php(
+        self, config_php: Path, infrastructure_name: str, moodle_version: str
+    ) -> None:
+        """Inject correct wwwroot/sslproxy/reverseproxy into Moodle's config.php
+        so it generates correct external URLs when served behind the proxy.
+        """
+        marker = "// boost-union-envs override"
+        src = config_php.read_text()
+        if marker in src:
+            return
+        wwwroot = (
+            f"https://{config().base_url}/{infrastructure_name}/{moodle_version}"
+        )
+        override = (
+            f"\n{marker}: correct external wwwroot when behind reverse proxy\n"
+            f"$CFG->wwwroot     = '{wwwroot}';\n"
+            "$CFG->sslproxy    = true;\n"
+            "$CFG->reverseproxy = true;\n\n"
+        )
+        setup_require = "require_once(__DIR__ . '/lib/setup.php');"
+        if setup_require in src:
+            src = src.replace(setup_require, override + setup_require)
+        else:
+            src = src + override
+        config_php.write_text(src)
 
     def teardown(self) -> None:
         log().info(f"starting teardown of test infrastructure {self.directory.name}")

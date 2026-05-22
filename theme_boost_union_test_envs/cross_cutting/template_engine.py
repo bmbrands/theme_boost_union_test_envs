@@ -95,6 +95,8 @@ class TemplateEngine:
     def moodle_nginx_config(
         self, infrastructure_name: str, moodle_version: str, port: str
     ) -> None:
+        from ..domain.moodle_version_utils import uses_public_webroot
+
         nginx_conf_template = self.template_path / "moodle_nginx.conf"
         # get only "path" from the fqdn, we don't need the domain name, called
         # location in nginx
@@ -103,9 +105,15 @@ class TemplateEngine:
             config().base_url
             + "/"
         )[2]
+        # Moodle 5.1+ serves its web entrypoint from moodle/public/. We
+        # proxy_pass directly into that subdirectory in the container so the
+        # external URL stays at /<infra>/<version>/ and Moodle does not need
+        # to issue any relative "./public/" redirects.
+        proxy_subpath = "public/" if uses_public_webroot(moodle_version) else ""
         substitutes = {
             "REPLACE_LOCATION": location,
             "REPLACE_PORT": port,
+            "REPLACE_PROXY_SUBPATH": proxy_subpath,
         }
         template = Template(nginx_conf_template.read_text())
         # using safe_substitute here instead as the nginx config contains variables starting with "$", which would make the default substitute call throw an KeyError as we are not replacing the template placeholder which we do not want
