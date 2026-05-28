@@ -146,6 +146,16 @@ class TestContainer:
         )
         # add some test data (smartdata.php is a web script, lives in public/ for 5.1+)
         self._run_local_php_script(f"{webroot_prefix}smartdata.php", "")
+        # The Moodle source is extracted from a tarball by the host user, so
+        # files inside the bind-mounted webroot are owned by that host user.
+        # Apache runs as www-data inside the container and therefore cannot
+        # write to those files, which prevents installing plugins via the
+        # Moodle web UI.  Fix ownership so www-data can write to /var/www/html.
+        # Note: on Linux hosts this chown propagates to the host filesystem for
+        # bind-mounted paths (including the plugin source directory).
+        self._run_docker_command(
+            "exec -u root webserver chown -R www-data:www-data /var/www/html"
+        )
 
     def _patch_config_for_https_proxy(self) -> None:
         """Force https://-wwwroot and sslproxy=true in the container's
