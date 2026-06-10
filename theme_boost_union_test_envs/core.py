@@ -41,7 +41,11 @@ def recreate_overview_html(func: Callable[..., Any]) -> Callable[..., Any]:
         # Using a defaultdict here to make sure the following operation doesn't result in a KeyError when adding keys for the first time
         envs_sorted_by_plugin = defaultdict(dict)
         for infra_name, info in infrastructure_yaml.items():
-            envs_sorted_by_plugin[info["plugin"]] |= {infra_name: info}
+            # Older infrastructures (created before plugin tracking was added)
+            # may not have a "plugin" key; fall back to "unknown" so the
+            # overview render does not crash the whole provisioning flow.
+            plugin = info.get("plugin", "unknown")
+            envs_sorted_by_plugin[plugin] |= {infra_name: info}
         template_engine().test_environment_overview_html(
             {"infrastructures": envs_sorted_by_plugin}
         )
