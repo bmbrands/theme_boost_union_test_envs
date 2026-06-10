@@ -102,8 +102,35 @@ class ApplicationConfigManager:
         return Path(path_name).resolve()
 
     def get_plugin_information(self, plugin_name: str) -> Tuple[str, str]:
-        repo_url, install_folder = config().supported_plugins[plugin_name].values()
-        return repo_url, install_folder
+        # Built-in plugins come from supported-plugins.yml. Manually-added
+        # plugins are resolved from the catalog (working_dir/plugins.yaml) so
+        # they can be provisioned just like the built-in ones.
+        supported = self.supported_plugins
+        if plugin_name in supported:
+            repo_url, install_folder = supported[plugin_name].values()
+            return repo_url, install_folder
+        catalog_entry = self._catalog_plugin_entry(plugin_name)
+        if catalog_entry is not None:
+            return catalog_entry["url"], catalog_entry["install_folder"]
+        raise BoostUnionTestEnvValueError(
+            f"Plugin '{plugin_name}' is not defined in supported-plugins.yml "
+            f"or the plugin catalog"
+        )
+
+    def _catalog_plugin_entry(self, plugin_name: str) -> dict[str, str] | None:
+        """Look up a manually-added plugin in the catalog (plugins.yaml)."""
+        catalog = self.working_dir / "plugins.yaml"
+        if not catalog.exists():
+            return None
+        with catalog.open("r") as f:
+            data = yaml.safe_load(f) or {}
+        for entry in data.get("plugins", []):
+            if entry.get("name") == plugin_name:
+                return {
+                    "url": entry.get("repositoryUrl", ""),
+                    "install_folder": entry.get("installationPath", ""),
+                }
+        return None
 
 
 def config() -> ApplicationConfigManager:

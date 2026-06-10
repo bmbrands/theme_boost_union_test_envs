@@ -17,6 +17,8 @@ class InfrastructureResponse(BaseModel):
     git_ref_reference: str
     created_at: str
     moodles: list[MoodleContainerResponse]
+    # The plugin (supported-plugins.yml key) this infrastructure was built for.
+    plugin: str = ""
     # When the infrastructure is still being provisioned, this reports the
     # current phase (reserving / cloning / building / initializing / error).
     # Empty/None when the infrastructure is ready.

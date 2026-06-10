@@ -91,7 +91,7 @@ class BoostUnionTestEnvCore:
     @recreate_overview_html
     @check_testbed_existence
     def setup_infrastructure(
-        self, infrastructure_name: str, plugin: MoodlePlugin, git_ref: GitReference
+        self, infrastructure_name: str, plugin: str | MoodlePlugin, git_ref: GitReference
     ) -> None:
         path = config().working_dir / infrastructure_name
         if path.exists():

@@ -49,7 +49,7 @@ class InfrastructureYAMLParser:
             f.flush()
 
     def new_infrastructure(
-        self, infrastructure_name: str, plugin: MoodlePlugin, git_ref: GitReference
+        self, infrastructure_name: str, plugin: str | MoodlePlugin, git_ref: GitReference
     ) -> None:
         current_time = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
         data: dict[str, dict[str, Any]] = {
@@ -57,7 +57,7 @@ class InfrastructureYAMLParser:
                 # created_at and last_modified_at are the same, as the infrastructure is new, so the times must co-incide
                 "created_at": current_time,
                 "last_modified_at": current_time,
-                "plugin": plugin.value,
+                "plugin": str(plugin),
                 "git_ref": {"type": git_ref.type.name, "reference": git_ref.ref},
                 "moodles": {},
             }
@@ -127,8 +127,11 @@ class InfrastructureYAMLParser:
     def infrastructure_info(self, infrastructure_name: str) -> dict[Any, Any]:
         return self.load_testbed_info()[infrastructure_name]
 
-    def get_plugin_for_infrastructure(self, infrastructure_name: str) -> MoodlePlugin:
-        return MoodlePlugin(self.infrastructure_info(infrastructure_name)["plugin"])
+    def get_plugin_for_infrastructure(self, infrastructure_name: str) -> str:
+        # Returns the raw plugin identifier (catalog name) so that both built-in
+        # plugins and manually-added catalog plugins are supported. Built-in
+        # names still match the MoodlePlugin enum values.
+        return str(self.infrastructure_info(infrastructure_name)["plugin"])
 
 
 def yaml_parser() -> InfrastructureYAMLParser:

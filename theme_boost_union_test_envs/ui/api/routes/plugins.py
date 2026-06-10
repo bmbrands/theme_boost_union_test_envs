@@ -201,28 +201,60 @@ class PluginListResponse(BaseModel):
     plugins: list[Plugin]
 
 
-_DEFAULT_PLUGINS: list[dict] = [
-    {
-        "id": "plugin-1",
-        "name": "theme_boost_union",
-        "displayName": "Boost Union",
-        "repositoryUrl": "https://github.com/moodle-an-hochschulen/moodle-theme_boost_union",
-        "installationPath": "theme/boost_union",
-        "description": "Enhanced Boost theme with additional features",
-        "type": "theme",
-        "isActive": True,
-    },
-    {
-        "id": "plugin-2",
-        "name": "mod_bookit",
-        "displayName": "BookIT - Exam Booking",
-        "repositoryUrl": "https://github.com/melanietreitinger/mod_bookit",
-        "installationPath": "mod/bookit",
-        "description": "Calendar and event management activity",
-        "type": "activity",
-        "isActive": True,
-    },
+# Human-friendly display name + type for known supported plugins. Anything
+# not listed falls back to a title-cased name and a prefix-derived type.
+_KNOWN_PLUGIN_META: dict[str, tuple[str, PluginType]] = {
+    "boost_union": ("Boost Union", "theme"),
+    "boost_union_child": ("Boost Union Child", "theme"),
+    "bookit": ("BookIT - Exam Booking", "activity"),
+}
+
+# Map plugin-key prefixes to a catalog type.
+_TYPE_BY_PREFIX: list[tuple[str, PluginType]] = [
+    ("block_", "block"),
+    ("local_", "local"),
+    ("tool_", "admin"),
 ]
+
+# Legacy auto-seeded catalog entries, now superseded by the supported-plugins.yml
+# registry. Dropped on load so they don't duplicate the real registry keys.
+_LEGACY_DEFAULT_NAMES = {"theme_boost_union", "mod_bookit"}
+
+
+def _derive_type(key: str) -> PluginType:
+    for prefix, ptype in _TYPE_BY_PREFIX:
+        if key.startswith(prefix):
+            return ptype
+    return "other"
+
+
+def _supported_plugin_entries() -> list[dict]:
+    """Build catalog entries for every plugin in supported-plugins.yml.
+
+    The entry ``name`` is the supported-plugins key, which is exactly the
+    identifier the create-infrastructure endpoint expects, so a plugin picked
+    in the UI can be provisioned without any name translation.
+    """
+    now = datetime.now().isoformat()
+    entries: list[dict] = []
+    for key, info in config().supported_plugins.items():
+        display, ptype = _KNOWN_PLUGIN_META.get(
+            key, (key.replace("_", " ").title(), _derive_type(key))
+        )
+        entries.append(
+            {
+                "id": f"plugin-{key}",
+                "name": key,
+                "displayName": display,
+                "repositoryUrl": info.get("url", ""),
+                "installationPath": info.get("install_folder", ""),
+                "type": ptype,
+                "isActive": True,
+                "createdAt": now,
+                "updatedAt": now,
+            }
+        )
+    return entries
 
 
 def _plugins_yaml_path() -> Path:
@@ -230,16 +262,47 @@ def _plugins_yaml_path() -> Path:
 
 
 def _load_plugins_raw() -> list[dict]:
+    """Return the effective plugin catalog.
+
+    The catalog always contains every plugin from supported-plugins.yml (the
+    defaults) plus any manually-added plugins persisted in plugins.yaml. User
+    edits to supported plugins (e.g. toggling ``isActive``) are preserved.
+    """
     path = _plugins_yaml_path()
+    supported = _supported_plugin_entries()
+    supported_by_name = {e["name"]: e for e in supported}
+
     if not path.exists():
-        # Seed with defaults on first run.
-        now = datetime.now().isoformat()
-        seeded = [{**p, "createdAt": now, "updatedAt": now} for p in _DEFAULT_PLUGINS]
-        _save_plugins_raw(seeded)
-        return seeded
+        _save_plugins_raw(supported)
+        return supported
+
     with open(path, "r") as f:
         data = yaml.safe_load(f) or {}
-    return list(data.get("plugins", []))
+    stored = list(data.get("plugins", []))
+    stored_names = {p.get("name") for p in stored}
+
+    # Manually-added plugins: anything that is neither a supported key nor a
+    # legacy default.
+    manual = [
+        p
+        for p in stored
+        if p.get("name") not in supported_by_name
+        and p.get("name") not in _LEGACY_DEFAULT_NAMES
+    ]
+
+    # Preserve already-persisted supported plugins (keeps user edits), then
+    # append any supported plugins not yet on disk.
+    persisted_supported = [p for p in stored if p.get("name") in supported_by_name]
+    persisted_names = {p.get("name") for p in persisted_supported}
+    new_supported = [e for e in supported if e["name"] not in persisted_names]
+
+    result = persisted_supported + new_supported + manual
+
+    # Persist only when the catalog gained supported plugins or still carried
+    # legacy defaults — avoids rewriting the file on every read.
+    if new_supported or (stored_names & _LEGACY_DEFAULT_NAMES):
+        _save_plugins_raw(result)
+    return result
 
 
 def _save_plugins_raw(plugins: list[dict]) -> None:
@@ -247,6 +310,26 @@ def _save_plugins_raw(plugins: list[dict]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w") as f:
         yaml.safe_dump({"plugins": plugins}, f, sort_keys=False)
+
+
+def get_plugin_registry_entry(name: str) -> dict | None:
+    """Resolve a plugin's repo URL + install folder by its catalog name.
+
+    Looks in supported-plugins.yml first (the canonical registry), then falls
+    back to manually-added plugins in the catalog (plugins.yaml). Returns a
+    dict shaped like the supported-plugins.yml entries
+    (``{"url": ..., "install_folder": ...}``) or ``None`` if unknown.
+    """
+    supported = config().supported_plugins
+    if name in supported:
+        return supported[name]
+    for p in _load_plugins_raw():
+        if p.get("name") == name:
+            return {
+                "url": p.get("repositoryUrl", ""),
+                "install_folder": p.get("installationPath", ""),
+            }
+    return None
 
 
 @router.get("", response_model=PluginListResponse)

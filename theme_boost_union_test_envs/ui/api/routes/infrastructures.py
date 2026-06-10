@@ -6,6 +6,7 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException
 from pydantic import BaseModel, Field
 
 from theme_boost_union_test_envs.cross_cutting import yaml_parser
+from theme_boost_union_test_envs.cross_cutting.logger import log
 from ..models import InfrastructureListResponse, InfrastructureResponse, MoodleContainerResponse
 
 router = APIRouter(prefix="/api/infrastructures", tags=["infrastructures"])
@@ -25,6 +26,11 @@ def _get_core():
 
 class CreateInfrastructureRequest(BaseModel):
     name: str = Field(..., min_length=1, description="Unique infrastructure name")
+    plugin: str = Field(
+        default="boost_union",
+        min_length=1,
+        description="Plugin key as defined in supported-plugins.yml (e.g. 'boost_union')",
+    )
     git_ref_type: Literal["branch", "tag", "commit", "pr"]
     git_ref: str = Field(..., min_length=1, description="Branch/tag name, commit SHA or PR number")
     moodle_versions: list[str] = Field(..., min_length=1, description="Moodle versions to build")
@@ -90,6 +96,7 @@ def list_infrastructures() -> InfrastructureListResponse:
                 git_ref_type=git_ref.get("type", ""),
                 git_ref_reference=str(git_ref.get("reference", "")),
                 created_at=data.get("created_at", ""),
+                plugin=str(data.get("plugin", "")),
                 moodles=moodles,
                 provisioning_phase=prov.get("phase") if prov else None,
                 provisioning_error=prov.get("error") if prov else None,
@@ -106,6 +113,7 @@ def list_infrastructures() -> InfrastructureListResponse:
                 git_ref_type=prov.get("git_ref_type", ""),
                 git_ref_reference=str(prov.get("git_ref_reference", "")),
                 created_at=prov.get("created_at", ""),
+                plugin=str(prov.get("plugin", "")),
                 moodles=[
                     MoodleContainerResponse(
                         moodle_version=str(v),
@@ -133,7 +141,7 @@ def _set_phase(name: str, phase: str) -> None:
             entry["phase"] = phase
 
 
-def _run_provisioning(name: str, git_ref_type: str, ref: str | int, moodle_versions: list[str]) -> None:
+def _run_provisioning(name: str, plugin: str, git_ref_type: str, ref: str | int, moodle_versions: list[str]) -> None:
     """Background worker that performs the actual setup + build.
 
     Runs in FastAPI's BackgroundTasks threadpool. Updates `_provisioning`
@@ -145,11 +153,12 @@ def _run_provisioning(name: str, git_ref_type: str, ref: str | int, moodle_versi
         core = _get_core()
         git_ref = GitReference(ref, GitReferenceType(git_ref_type))
         _set_phase(name, "cloning")
-        core.setup_infrastructure(name, git_ref)
+        core.setup_infrastructure(name, plugin, git_ref)
         _set_phase(name, "building")
         core.build_infrastructure(name, *moodle_versions)
         _set_phase(name, "finalizing")
     except Exception as e:  # noqa: BLE001 - we must record any failure
+        log().exception("Provisioning failed for infrastructure '{}'", name)
         with _provisioning_lock:
             if name in _provisioning:
                 _provisioning[name]["error"] = str(e)
@@ -185,6 +194,20 @@ def create_infrastructure(
                 detail=f"Infrastructure '{payload.name}' already exists",
             )
 
+    # Validate the plugin against the known registry (supported-plugins.yml
+    # plus manually-added catalog plugins) so we fail fast with a clear 400
+    # instead of blowing up inside the background task.
+    from .plugins import get_plugin_registry_entry
+
+    if get_plugin_registry_entry(payload.plugin) is None:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Unknown plugin '{payload.plugin}'. It must be defined in "
+                f"supported-plugins.yml or added to the plugin catalog."
+            ),
+        )
+
     # PRs are passed as ints in the domain layer.
     ref: str | int = payload.git_ref
     if payload.git_ref_type == "pr":
@@ -197,6 +220,7 @@ def create_infrastructure(
         _provisioning[payload.name] = {
             "git_ref_type": payload.git_ref_type,
             "git_ref_reference": payload.git_ref,
+            "plugin": payload.plugin,
             "moodle_versions": list(payload.moodle_versions),
             "created_at": datetime.now(timezone.utc).isoformat(),
             "phase": "queued",
@@ -205,6 +229,7 @@ def create_infrastructure(
     background_tasks.add_task(
         _run_provisioning,
         payload.name,
+        payload.plugin,
         payload.git_ref_type,
         ref,
         list(payload.moodle_versions),
@@ -235,6 +260,7 @@ def _run_build_only(name: str, moodle_versions: list[str]) -> None:
         core.build_infrastructure(name, *moodle_versions)
         _set_phase(name, "finalizing")
     except Exception as e:  # noqa: BLE001 - record any failure
+        log().exception("Container build failed for infrastructure '{}'", name)
         with _provisioning_lock:
             if name in _provisioning:
                 _provisioning[name]["error"] = str(e)

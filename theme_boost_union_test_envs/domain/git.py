@@ -61,10 +61,11 @@ class GitRepository:
 
 
 def clone_plugin_repo(
-    plugin: MoodlePlugin, directory: Path, git_ref: GitReference
+    plugin: str | MoodlePlugin, directory: Path, git_ref: GitReference
 ) -> GitRepository:
-    # extracts the url and install_folder from our supported-plugins.yml
-    repo_url, install_folder = config().supported_plugins[plugin.value].values()
+    # extracts the url and install_folder from the plugin registry
+    # (supported-plugins.yml plus any manually-added catalog plugins)
+    repo_url, install_folder = config().get_plugin_information(str(plugin))
     return GitRepository(
         repo_url,
         directory / install_folder,

@@ -21,7 +21,7 @@ class TestInfrastructure:
 
     def setup(
         self,
-        plugin: MoodlePlugin,
+        plugin: str | MoodlePlugin,
         git_ref: GitReference,
     ) -> None:
         """Setups the test infrastructure for a given plugin 'version' (denoted by it's git reference). To do so, it creates the following directory structure, e.g.:
@@ -71,7 +71,7 @@ class TestInfrastructure:
         # Bad: Moving the check further up, as the plugin name can surely be read from infrastructure.yaml in every other case than the "setup" command - this introduces changes in multiple spots that actually do not care for which plugin Moodles/Docker container are modified.
         # Good, but not feasible as I can't allocate enough time: better would be a daemon, which holds all these objects in-mem anyways, as then changing this class to be an actually entity would make sense.
         plugin = yaml_parser().get_plugin_for_infrastructure(self.directory.name)
-        _, install_folder = config().get_plugin_information(plugin.value)
+        _, install_folder = config().get_plugin_information(str(plugin))
 
         for version_nr, archive_path in new_versions.items():
             log().info(f"{20*'-'} {version_nr} {20*'-'}")
