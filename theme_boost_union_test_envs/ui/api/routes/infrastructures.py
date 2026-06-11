@@ -1,13 +1,31 @@
 import threading
 from datetime import datetime, timezone
-from typing import Literal
+from typing import Any, Literal
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException
+import yaml
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from theme_boost_union_test_envs.cross_cutting import yaml_parser
+from theme_boost_union_test_envs.cross_cutting import config, yaml_parser
 from theme_boost_union_test_envs.cross_cutting.logger import log
-from ..models import InfrastructureListResponse, InfrastructureResponse, MoodleContainerResponse
+from ..models import (
+    InfrastructureListResponse,
+    InfrastructureOwner,
+    InfrastructureResponse,
+    MoodleContainerResponse,
+)
+from ..security import active_user
+
+
+def _owner_model(name: str) -> InfrastructureOwner | None:
+    owner = _get_owner(name)
+    if not owner:
+        return None
+    return InfrastructureOwner(
+        id=owner.get("id", ""),
+        name=owner.get("name", ""),
+        email=owner.get("email", ""),
+    )
 
 router = APIRouter(prefix="/api/infrastructures", tags=["infrastructures"])
 
@@ -16,6 +34,45 @@ router = APIRouter(prefix="/api/infrastructures", tags=["infrastructures"])
 # Shape: {name: {git_ref_type, git_ref_reference, moodle_versions, created_at, error?}}
 _provisioning: dict[str, dict] = {}
 _provisioning_lock = threading.Lock()
+
+# Maps infrastructure name -> owner {id, name, email}. Persisted next to the
+# other working-dir state so ownership survives restarts without touching the
+# domain/yaml-parser layer.
+_owners_lock = threading.Lock()
+
+
+def _owners_path():
+    return config().working_dir / "infra_owners.yaml"
+
+
+def _load_owners() -> dict[str, dict[str, str]]:
+    path = _owners_path()
+    if not path.exists():
+        return {}
+    with open(path, "r") as f:
+        data = yaml.safe_load(f) or {}
+    owners = data.get("owners", {})
+    return owners if isinstance(owners, dict) else {}
+
+
+def _record_owner(name: str, user: dict[str, Any]) -> None:
+    owner = {
+        "id": user.get("id", ""),
+        "name": f"{user.get('first_name', '')} {user.get('last_name', '')}".strip(),
+        "email": user.get("email", ""),
+    }
+    with _owners_lock:
+        owners = _load_owners()
+        owners[name] = owner
+        path = _owners_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "w") as f:
+            yaml.safe_dump({"owners": owners}, f, sort_keys=False)
+
+
+def _get_owner(name: str) -> dict[str, str] | None:
+    with _owners_lock:
+        return _load_owners().get(name)
 
 
 def _get_core():
@@ -98,6 +155,7 @@ def list_infrastructures() -> InfrastructureListResponse:
                 created_at=data.get("created_at", ""),
                 plugin=str(data.get("plugin", "")),
                 moodles=moodles,
+                created_by=_owner_model(name),
                 provisioning_phase=prov.get("phase") if prov else None,
                 provisioning_error=prov.get("error") if prov else None,
             )
@@ -126,6 +184,7 @@ def list_infrastructures() -> InfrastructureListResponse:
                     )
                     for v in prov["moodle_versions"]
                 ],
+                created_by=_owner_model(name),
                 provisioning_phase=prov.get("phase"),
                 provisioning_error=prov.get("error"),
             )
@@ -173,6 +232,7 @@ def _run_provisioning(name: str, plugin: str, git_ref_type: str, ref: str | int,
 def create_infrastructure(
     payload: CreateInfrastructureRequest,
     background_tasks: BackgroundTasks,
+    current: dict = Depends(active_user),
 ) -> CreateInfrastructureResponse:
     """Schedule creation of a new infrastructure and its Moodle containers.
 
@@ -225,6 +285,9 @@ def create_infrastructure(
             "created_at": datetime.now(timezone.utc).isoformat(),
             "phase": "queued",
         }
+
+    # Persist ownership so the table can show who created the environment.
+    _record_owner(payload.name, current)
 
     background_tasks.add_task(
         _run_provisioning,
