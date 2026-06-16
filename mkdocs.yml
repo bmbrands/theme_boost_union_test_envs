@@ -6,6 +6,7 @@ nav:
   - home: index.md
   - installation: installation.md
   - usage: usage.md
+  - authentication: authentication.md
   - testing: testing.md
   - debugging: debugging.md
   - Moodle 5.x: moodle5.md

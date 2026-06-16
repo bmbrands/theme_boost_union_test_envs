@@ -16,6 +16,7 @@
 
 # 2. Create an infrastructure for Boost Union's main branch
 ./boost-union-envs setup my-test branch main
+./boost-union-envs setup mystuff boost_union branch MOODLE_501_STABLE
 
 # 3. Build Moodle 4.5.2 and 5.1.0 containers
 ./boost-union-envs build my-test 4.5.2 5.1.0

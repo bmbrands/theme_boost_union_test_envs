@@ -155,8 +155,14 @@ python3 -m venv venv
 ./venv/bin/pip install -q \
     docker fire gitpython loguru dependency-injector pyyaml \
     rich requests mergedeep jinja2 \
-    fastapi 'uvicorn[standard]' httpx
+    fastapi 'uvicorn[standard]' httpx \
+    bcrypt itsdangerous
 ```
+
+> `bcrypt` and `itsdangerous` are required by the authentication layer
+> (password hashing and signed session cookies). If you upgrade an existing
+> deployment that predates auth, install them into the venv and restart:
+> `/opt/boost-union-envs/venv/bin/pip install bcrypt itsdangerous && systemctl restart boost-union-api`.
 
 Smoke-test the import:
 
