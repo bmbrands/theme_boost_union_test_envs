@@ -58,6 +58,12 @@ class TestContainer:
         """
         # Wait until containers have been started and the DB is available
         self._run_docker_command("up -d && bin/moodle-docker-wait-for-db")
+        # The Moodle source tree is bind-mounted from the host. Files copied
+        # during build are owned by the host build user, so the container's
+        # www-data cannot write into the tree — which breaks installing
+        # plugins through Moodle's web UI. Hand ownership to www-data now that
+        # the container is running.
+        self._chown_moodle_sources_to_webserver_user()
         # Prepare the Moodle inside the test container for the actual testing, i.e. run postcondition scripts, e.g. configure admin, make sure DB uses correct schemata and is well populated, etc ...
         self._configure_moodle_instance()
         host, port, pw, _ = self.get_access_info()
@@ -154,6 +160,22 @@ class TestContainer:
                 "admin/cli/cfg.php",
                 "--name=theme --set=boost_union",
             )
+
+    def _chown_moodle_sources_to_webserver_user(self) -> None:
+        """Give the container's www-data user ownership of the bind-mounted
+        Moodle source tree so plugins can be installed through the web UI.
+
+        The source is built on the host (owned by the build user) and mounted
+        at /var/www/html. Running the chown inside the container maps the
+        change straight onto the host bind mount, so this also fixes the
+        on-disk ownership. www-data is the runtime user of the
+        moodlehq/moodle-php-apache image."""
+        log().info(
+            f"handing /var/www/html ownership to www-data in {self.infrastructure}/{self.version}"
+        )
+        self._run_docker_command(
+            "exec -T webserver chown -R www-data:www-data /var/www/html"
+        )
 
     def _patch_config_for_https_proxy(self) -> None:
         """Force https://-wwwroot and sslproxy=true in the container's
