@@ -208,11 +208,13 @@ def create_infrastructure(
             ),
         )
 
-    # PRs are passed as ints in the domain layer.
+    # PRs are passed as ints in the domain layer. The plugin-refs endpoint
+    # exposes PRs with a "PR#" prefix (e.g. "PR#123") for display, so strip it
+    # before coercing to int.
     ref: str | int = payload.git_ref
     if payload.git_ref_type == "pr":
         try:
-            ref = int(payload.git_ref)
+            ref = int(payload.git_ref.removeprefix("PR#"))
         except ValueError as e:
             raise HTTPException(status_code=400, detail="PR reference must be numeric") from e
 
