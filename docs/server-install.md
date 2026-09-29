@@ -344,6 +344,59 @@ environments — there are no hardcoded ports anywhere in the public URLs.
 
 ---
 
+## 13a. Automated instance lifecycle (scheduler)
+
+The backend ships a reaper that **automatically stops long-running instances**
+and **cleans up long-idle (stopped) ones**, so the host reclaims CPU/RAM/disk
+without manual teardown. It is a standalone script driven by system cron.
+
+### Enable it (opt-in)
+
+Automation is **disabled by default** — nothing is stopped or destroyed until
+you configure a policy. Edit the working directory's `settings.yaml` and add a
+`lifecycle` block under `values` (all keys optional; defaults shown):
+
+```yaml
+# example_pwd/settings.yaml
+values:
+  lifecycle:
+    auto_stop_enabled: false          # stop running instances past their runtime
+    max_runtime_minutes: 480          # 8h; stop an instance running longer than this
+    daily_stop_time: ""               # optional "HH:MM" (UTC); stop all running at/after
+    auto_cleanup_enabled: false       # destroy stopped instances that stay idle
+    stopped_retention_days: 7         # destroy an instance stopped/idle longer than this
+    cleanup_empty_infrastructures: true  # tear down an infra once its last instance is gone
+```
+
+> All times are interpreted as **UTC**. "Stop" preserves the instance's data;
+> "cleanup" **destroys** the instance (and its data) to reclaim disk.
+
+### Schedule it
+
+Run the reaper from the **backend directory** (so `config.yml` / the active
+`env.*.yml` resolve) via cron, e.g. every 15 minutes:
+
+```cron
+*/15 * * * * cd /opt/boost-union-envs/backend && \
+    /opt/boost-union-envs/venv/bin/python scripts/reap_instances.py \
+    >> /var/log/boost-union-reap.log 2>&1
+```
+
+Preview what it would do without changing anything:
+
+```bash
+cd /opt/boost-union-envs/backend
+/opt/boost-union-envs/venv/bin/python scripts/reap_instances.py --dry-run
+```
+
+The reaper logs each stop/destroy/teardown; it exits non-zero if any action
+fails so cron mail / monitoring can notice. Instances gain `started_at` /
+`stopped_at` timestamps in `infrastructure.yaml` as they are started/stopped;
+instances that predate this feature fall back to the infrastructure's
+`last_modified_at` / `created_at`.
+
+---
+
 ## 14. Where things live
 
 | Path | Purpose |

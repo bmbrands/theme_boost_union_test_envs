@@ -1,0 +1,335 @@
+"""Automated instance-lifecycle management (work package 3).
+
+This module holds the *decision logic* for reaping Moodle test instances:
+
+- :func:`load_policy` reads the admin-configurable policy from ``settings.yaml``.
+- :func:`plan_actions` is a **pure** function: given the testbed state, a policy
+  and the current time, it returns the list of stop/destroy/teardown actions to
+  perform. It performs no I/O and touches no Docker, so it is trivially testable.
+- :func:`execute` applies a list of actions using the existing ``core`` lifecycle
+  methods (or reports them, in dry-run mode).
+
+The reaper is intended to be driven periodically by ``scripts/reap_instances.py``
+from system cron. Automation is **disabled by default**: nothing is stopped or
+destroyed until an administrator opts in via ``settings.yaml``.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from datetime import datetime, time, timedelta, timezone
+from typing import Any, Callable
+
+# Status strings the provisioner writes into infrastructure.yaml.
+STATUS_STARTED = "STARTED"
+STATUS_STOPPED = "STOPPED"
+
+
+# ---------------------------------------------------------------------------
+# Policy
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class LifecyclePolicy:
+    """Admin-configurable lifecycle policy. Safe, automation-off defaults."""
+
+    auto_stop_enabled: bool = False
+    max_runtime_minutes: int = 480  # 8 hours
+    daily_stop_time: str = ""  # "HH:MM" (UTC); empty disables
+    auto_cleanup_enabled: bool = False
+    stopped_retention_days: int = 7
+    cleanup_empty_infrastructures: bool = True
+
+
+def policy_from_values(values: dict[str, Any] | None) -> LifecyclePolicy:
+    """Build a policy from a settings ``values`` dict's ``lifecycle`` block.
+
+    Unknown/absent keys fall back to the dataclass defaults; malformed values
+    are ignored in favour of the default so a bad setting never disables safety.
+    """
+    block: dict[str, Any] = {}
+    if isinstance(values, dict):
+        candidate = values.get("lifecycle")
+        if isinstance(candidate, dict):
+            block = candidate
+
+    defaults = LifecyclePolicy()
+
+    def _bool(key: str, default: bool) -> bool:
+        v = block.get(key, default)
+        if isinstance(v, bool):
+            return v
+        if isinstance(v, str):
+            return v.strip().lower() in ("1", "true", "yes", "on")
+        return default
+
+    def _int(key: str, default: int) -> int:
+        v = block.get(key, default)
+        try:
+            return int(v)
+        except (TypeError, ValueError):
+            return default
+
+    def _str(key: str, default: str) -> str:
+        v = block.get(key, default)
+        return v if isinstance(v, str) else default
+
+    return LifecyclePolicy(
+        auto_stop_enabled=_bool("auto_stop_enabled", defaults.auto_stop_enabled),
+        max_runtime_minutes=_int("max_runtime_minutes", defaults.max_runtime_minutes),
+        daily_stop_time=_str("daily_stop_time", defaults.daily_stop_time),
+        auto_cleanup_enabled=_bool(
+            "auto_cleanup_enabled", defaults.auto_cleanup_enabled
+        ),
+        stopped_retention_days=_int(
+            "stopped_retention_days", defaults.stopped_retention_days
+        ),
+        cleanup_empty_infrastructures=_bool(
+            "cleanup_empty_infrastructures", defaults.cleanup_empty_infrastructures
+        ),
+    )
+
+
+def load_policy() -> LifecyclePolicy:
+    """Load the lifecycle policy from ``<working_dir>/settings.yaml``."""
+    import yaml
+
+    from ..cross_cutting.configuration import config
+
+    path = config().working_dir / "settings.yaml"
+    values: dict[str, Any] = {}
+    if path.exists():
+        with open(path, "r") as f:
+            data = yaml.safe_load(f) or {}
+        raw = data.get("values", {})
+        if isinstance(raw, dict):
+            values = raw
+    return policy_from_values(values)
+
+
+# ---------------------------------------------------------------------------
+# Planning (pure)
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class Action:
+    """A single lifecycle action the reaper should perform."""
+
+    kind: str  # "stop" | "destroy" | "teardown"
+    infrastructure: str
+    version: str | None = None
+    reason: str = ""
+
+
+def _parse_ts(value: Any) -> datetime | None:
+    """Parse a stored timestamp into a naive-UTC datetime, or None.
+
+    Tolerates both the ``"%Y-%m-%d %H:%M:%S"`` form (infra/started/stopped) and
+    ISO-8601 (moodle ``created_at``), with or without a timezone.
+    """
+    if not isinstance(value, str) or not value.strip():
+        return None
+    text = value.strip()
+    parsed: datetime | None = None
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S"):
+            try:
+                parsed = datetime.strptime(text, fmt)
+                break
+            except ValueError:
+                continue
+    if parsed is None:
+        return None
+    # Normalise to naive UTC for consistent comparison.
+    if parsed.tzinfo is not None:
+        parsed = parsed.astimezone(timezone.utc).replace(tzinfo=None)
+    return parsed
+
+
+def _first_ts(*values: Any) -> datetime | None:
+    for v in values:
+        ts = _parse_ts(v)
+        if ts is not None:
+            return ts
+    return None
+
+
+def _parse_hhmm(value: str) -> time | None:
+    try:
+        hh, mm = value.strip().split(":", 1)
+        return time(int(hh), int(mm))
+    except (ValueError, AttributeError):
+        return None
+
+
+def plan_actions(
+    testbed_info: dict[str, Any],
+    policy: LifecyclePolicy,
+    now: datetime | None = None,
+) -> list[Action]:
+    """Decide which instances to stop / destroy / teardown.
+
+    Pure: no I/O, no Docker. ``now`` defaults to the current UTC time (naive).
+    Malformed infrastructure/moodle records are skipped individually so a single
+    bad entry never aborts the whole plan.
+    """
+    if now is None:
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+    elif now.tzinfo is not None:
+        now = now.astimezone(timezone.utc).replace(tzinfo=None)
+
+    max_runtime = timedelta(minutes=max(0, policy.max_runtime_minutes))
+    retention = timedelta(days=max(0, policy.stopped_retention_days))
+    stop_time = _parse_hhmm(policy.daily_stop_time) if policy.daily_stop_time else None
+
+    actions: list[Action] = []
+
+    for infra_name, infra in (testbed_info or {}).items():
+        if not isinstance(infra, dict):
+            continue
+        moodles = infra.get("moodles")
+        if not isinstance(moodles, dict):
+            continue
+
+        infra_modified = infra.get("last_modified_at")
+        infra_created = infra.get("created_at")
+
+        all_versions = [str(v) for v in moodles.keys()]
+        to_destroy: list[str] = []
+
+        for version, moodle in moodles.items():
+            if not isinstance(moodle, dict):
+                continue
+            version = str(version)
+            status = moodle.get("status")
+
+            # --- auto-stop: running past runtime / daily stop time ----------
+            if policy.auto_stop_enabled and status == STATUS_STARTED:
+                started = _first_ts(
+                    moodle.get("started_at"), infra_modified, infra_created
+                )
+                stop = False
+                reason = ""
+                if started is not None and now - started > max_runtime:
+                    stop = True
+                    reason = (
+                        f"running for {now - started} "
+                        f"(> {policy.max_runtime_minutes}m max runtime)"
+                    )
+                elif stop_time is not None and now.time() >= stop_time:
+                    stop = True
+                    reason = f"past daily stop time {policy.daily_stop_time} UTC"
+                if stop:
+                    actions.append(
+                        Action("stop", infra_name, version, reason)
+                    )
+
+            # --- auto-cleanup: stopped/idle past retention -----------------
+            if policy.auto_cleanup_enabled and status == STATUS_STOPPED:
+                stopped = _first_ts(moodle.get("stopped_at"), infra_modified)
+                if stopped is not None and now - stopped > retention:
+                    to_destroy.append(version)
+
+        # If every moodle in the infra is being cleaned up, tear the whole
+        # infrastructure down in one go instead of per-moodle destroys.
+        if (
+            to_destroy
+            and policy.cleanup_empty_infrastructures
+            and set(to_destroy) == set(all_versions)
+        ):
+            actions.append(
+                Action(
+                    "teardown",
+                    infra_name,
+                    None,
+                    f"all {len(all_versions)} instance(s) idle > "
+                    f"{policy.stopped_retention_days}d",
+                )
+            )
+        else:
+            for version in to_destroy:
+                actions.append(
+                    Action(
+                        "destroy",
+                        infra_name,
+                        version,
+                        f"stopped/idle > {policy.stopped_retention_days}d",
+                    )
+                )
+
+    return actions
+
+
+# ---------------------------------------------------------------------------
+# Execution
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class ReapSummary:
+    stopped: int = 0
+    destroyed: int = 0
+    torn_down: int = 0
+    failures: int = 0
+    planned: list[Action] = field(default_factory=list)
+
+
+def execute(
+    actions: list[Action],
+    core: Any,
+    *,
+    dry_run: bool = False,
+    on_pre_destroy: Callable[[Action], None] | None = None,
+    logger: Callable[[str], None] | None = None,
+) -> ReapSummary:
+    """Apply lifecycle ``actions`` using ``core``.
+
+    In ``dry_run`` mode no ``core`` method is called; actions are only reported.
+    ``on_pre_destroy`` is invoked before each destroy/teardown (the seam for
+    future pre-deletion notifications). Each action is isolated: a failure is
+    logged and counted, but does not abort the remaining actions.
+    """
+    def _log(msg: str) -> None:
+        if logger is not None:
+            logger(msg)
+
+    summary = ReapSummary(planned=list(actions))
+
+    for action in actions:
+        target = (
+            f"{action.infrastructure}/{action.version}"
+            if action.version
+            else action.infrastructure
+        )
+        verb = {"stop": "stop", "destroy": "destroy", "teardown": "teardown"}.get(
+            action.kind, action.kind
+        )
+        prefix = "[dry-run] would " if dry_run else ""
+        _log(f"{prefix}{verb} {target} ({action.reason})")
+
+        if dry_run:
+            continue
+
+        try:
+            if action.kind == "stop":
+                core.stop_environment(action.infrastructure, action.version)
+                summary.stopped += 1
+            elif action.kind == "destroy":
+                if on_pre_destroy is not None:
+                    on_pre_destroy(action)
+                core.destroy_environment(action.infrastructure, action.version)
+                summary.destroyed += 1
+            elif action.kind == "teardown":
+                if on_pre_destroy is not None:
+                    on_pre_destroy(action)
+                core.teardown_infrastructure(action.infrastructure)
+                summary.torn_down += 1
+        except Exception as exc:  # noqa: BLE001 - one bad action must not abort
+            summary.failures += 1
+            _log(f"FAILED: {verb} {target}: {exc}")
+
+    return summary

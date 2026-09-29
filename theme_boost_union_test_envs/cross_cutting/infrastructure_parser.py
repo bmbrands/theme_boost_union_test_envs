@@ -88,11 +88,22 @@ class InfrastructureYAMLParser:
         state: str,
         *versions: str,
     ) -> None:
+        # Record when a container last transitioned to running/stopped so the
+        # lifecycle reaper can reason about runtime and idle duration. The
+        # timestamp key depends on the target state; other states leave both
+        # untouched.
+        current_time = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+        extra: dict[str, str] = {}
+        if state == "STARTED":
+            extra["started_at"] = current_time
+        elif state == "STOPPED":
+            extra["stopped_at"] = current_time
         data = {
             infrastructure_name: {
                 "moodles": {
                     ver: {
                         "status": state,
+                        **extra,
                     }
                     for ver in versions
                 }
