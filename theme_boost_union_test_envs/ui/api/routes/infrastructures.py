@@ -2,11 +2,10 @@ import threading
 from datetime import datetime, timezone
 from typing import Any, Literal
 
-import yaml
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from theme_boost_union_test_envs.cross_cutting import config, yaml_parser
+from theme_boost_union_test_envs.cross_cutting import yaml_parser
 from theme_boost_union_test_envs.cross_cutting.logger import log
 from ..models import (
     InfrastructureListResponse,
@@ -20,72 +19,36 @@ router = APIRouter(prefix="/api/infrastructures", tags=["infrastructures"])
 
 
 # In-memory tracker of infrastructures currently being provisioned.
-# Shape: {name: {git_ref_type, git_ref_reference, moodle_versions, created_at, error?}}
+# Shape: {name: {git_ref_type, git_ref_reference, moodle_versions, created_at,
+#                created_by?, error?}}
 _provisioning: dict[str, dict] = {}
 _provisioning_lock = threading.Lock()
 
-# Maps infrastructure name -> owner {id, name, email}. Persisted next to the
-# other working-dir state (infra_owners.yaml) so ownership survives restarts
-# without touching the domain/yaml-parser layer.
-_owners_lock = threading.Lock()
 
-
-def _owners_path():
-    return config().working_dir / "infra_owners.yaml"
-
-
-def _load_owners() -> dict[str, dict[str, str]]:
-    path = _owners_path()
-    if not path.exists():
-        return {}
-    with open(path, "r") as f:
-        data = yaml.safe_load(f) or {}
-    owners = data.get("owners", {})
-    return owners if isinstance(owners, dict) else {}
-
-
-def _record_owner(name: str, user: dict[str, Any]) -> None:
-    owner = {
+def _owner_dict(user: dict[str, Any]) -> dict[str, str]:
+    """Build the persisted owner record from a session user."""
+    return {
         "id": user.get("id", ""),
         "name": f"{user.get('first_name', '')} {user.get('last_name', '')}".strip(),
         "email": user.get("email", ""),
     }
-    with _owners_lock:
-        owners = _load_owners()
-        owners[name] = owner
-        path = _owners_path()
-        path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = path.with_suffix(".yaml.tmp")
-        with open(tmp, "w") as f:
-            yaml.safe_dump({"owners": owners}, f, sort_keys=False)
-        import os
-
-        os.replace(tmp, path)
 
 
-def _get_owner(name: str) -> dict[str, str] | None:
-    with _owners_lock:
-        return _load_owners().get(name)
+def _owner_model(owner: dict[str, Any] | None) -> InfrastructureOwner | None:
+    """Return the owner record as a model, or None when unknown.
 
-
-def _owner_model(name: str) -> InfrastructureOwner | None:
-    """Return the owner of ``name`` as a model, or None when unknown.
-
-    Tolerates environments created before ownership tracking existed and any
+    Sourced from the ``created_by`` field on the infrastructure record in
+    ``infrastructure.yaml`` (or the in-memory provisioning entry). Tolerates
+    environments created before ownership tracking existed and any
     malformed/missing owner record so listing never fails on lookup.
     """
-    try:
-        owner = _get_owner(name)
-    except Exception:  # noqa: BLE001 - ownership is best-effort metadata
-        return None
-    if not owner:
+    if not isinstance(owner, dict) or not owner:
         return None
     return InfrastructureOwner(
-        id=owner.get("id", ""),
-        name=owner.get("name", ""),
-        email=owner.get("email", ""),
+        id=str(owner.get("id", "")),
+        name=str(owner.get("name", "")),
+        email=str(owner.get("email", "")),
     )
-
 
 
 def _get_core():
@@ -168,7 +131,10 @@ def list_infrastructures() -> InfrastructureListResponse:
                 created_at=data.get("created_at", ""),
                 plugin=str(data.get("plugin", "")),
                 moodles=moodles,
-                created_by=_owner_model(name),
+                created_by=_owner_model(
+                    data.get("created_by")
+                    or (prov.get("created_by") if prov else None)
+                ),
                 provisioning_phase=prov.get("phase") if prov else None,
                 provisioning_error=prov.get("error") if prov else None,
             )
@@ -197,7 +163,7 @@ def list_infrastructures() -> InfrastructureListResponse:
                     )
                     for v in prov["moodle_versions"]
                 ],
-                created_by=_owner_model(name),
+                created_by=_owner_model(prov.get("created_by")),
                 provisioning_phase=prov.get("phase"),
                 provisioning_error=prov.get("error"),
             )
@@ -213,7 +179,14 @@ def _set_phase(name: str, phase: str) -> None:
             entry["phase"] = phase
 
 
-def _run_provisioning(name: str, plugin: str, git_ref_type: str, ref: str | int, moodle_versions: list[str]) -> None:
+def _run_provisioning(
+    name: str,
+    plugin: str,
+    git_ref_type: str,
+    ref: str | int,
+    moodle_versions: list[str],
+    created_by: dict[str, str] | None = None,
+) -> None:
     """Background worker that performs the actual setup + build.
 
     Runs in FastAPI's BackgroundTasks threadpool. Updates `_provisioning`
@@ -225,7 +198,7 @@ def _run_provisioning(name: str, plugin: str, git_ref_type: str, ref: str | int,
         core = _get_core()
         git_ref = GitReference(ref, GitReferenceType(git_ref_type))
         _set_phase(name, "cloning")
-        core.setup_infrastructure(name, plugin, git_ref)
+        core.setup_infrastructure(name, plugin, git_ref, created_by=created_by)
         _set_phase(name, "building")
         core.build_infrastructure(name, *moodle_versions)
         _set_phase(name, "finalizing")
@@ -291,6 +264,7 @@ def create_infrastructure(
         except ValueError as e:
             raise HTTPException(status_code=400, detail="PR reference must be numeric") from e
 
+    owner = _owner_dict(current)
     with _provisioning_lock:
         _provisioning[payload.name] = {
             "git_ref_type": payload.git_ref_type,
@@ -298,11 +272,9 @@ def create_infrastructure(
             "plugin": payload.plugin,
             "moodle_versions": list(payload.moodle_versions),
             "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_by": owner,
             "phase": "queued",
         }
-
-    # Persist ownership so the environments table can show who created it.
-    _record_owner(payload.name, current)
 
     background_tasks.add_task(
         _run_provisioning,
@@ -311,6 +283,7 @@ def create_infrastructure(
         payload.git_ref_type,
         ref,
         list(payload.moodle_versions),
+        owner,
     )
 
     return CreateInfrastructureResponse(

@@ -49,19 +49,27 @@ class InfrastructureYAMLParser:
             f.flush()
 
     def new_infrastructure(
-        self, infrastructure_name: str, plugin: str | MoodlePlugin, git_ref: GitReference
+        self,
+        infrastructure_name: str,
+        plugin: str | MoodlePlugin,
+        git_ref: GitReference,
+        created_by: dict[str, str] | None = None,
     ) -> None:
         current_time = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
-        data: dict[str, dict[str, Any]] = {
-            infrastructure_name: {
-                # created_at and last_modified_at are the same, as the infrastructure is new, so the times must co-incide
-                "created_at": current_time,
-                "last_modified_at": current_time,
-                "plugin": str(plugin),
-                "git_ref": {"type": git_ref.type.name, "reference": git_ref.ref},
-                "moodles": {},
-            }
+        infra: dict[str, Any] = {
+            # created_at and last_modified_at are the same, as the infrastructure is new, so the times must co-incide
+            "created_at": current_time,
+            "last_modified_at": current_time,
+            "plugin": str(plugin),
+            "git_ref": {"type": git_ref.type.name, "reference": git_ref.ref},
+            "moodles": {},
         }
+        # The user who created the infrastructure, when known (web API only).
+        # Stored at the same level as created_at/git_ref; the contained moodles
+        # are implicitly owned by this user. Omitted for CLI-created infras.
+        if created_by:
+            infra["created_by"] = created_by
+        data: dict[str, dict[str, Any]] = {infrastructure_name: infra}
         # Adding false here to signalize that we do not want to add a "modified_at" field, as we have already done that
         # reason: we want created_at and modified_at to be the same after creating a new infrastructure
         self.merge_into_testbed_info(infrastructure_name, data, False)

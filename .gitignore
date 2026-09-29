@@ -116,7 +116,6 @@ example_pwd/
 # Auth / user-management state (secrets - never commit, in any working dir)
 users.yaml
 .session_secret
-infra_owners.yaml
 
 # Apple filesystem metadata
 .DS_Store

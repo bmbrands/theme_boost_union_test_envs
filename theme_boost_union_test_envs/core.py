@@ -95,15 +95,22 @@ class BoostUnionTestEnvCore:
     @recreate_overview_html
     @check_testbed_existence
     def setup_infrastructure(
-        self, infrastructure_name: str, plugin: str | MoodlePlugin, git_ref: GitReference
+        self,
+        infrastructure_name: str,
+        plugin: str | MoodlePlugin,
+        git_ref: GitReference,
+        created_by: dict[str, str] | None = None,
     ) -> None:
         path = config().working_dir / infrastructure_name
         if path.exists():
             raise NameAlreadyTakenError("Infrastructure exists already")
         new_infra = TestInfrastructure(path)
         new_infra.setup(plugin, git_ref)
-        # Adding infrastructure name, plugin_name + gitref to file database
-        self.yaml_parser.new_infrastructure(infrastructure_name, plugin, git_ref)
+        # Adding infrastructure name, plugin_name + gitref (+ creator, when
+        # provided by the web API) to file database
+        self.yaml_parser.new_infrastructure(
+            infrastructure_name, plugin, git_ref, created_by
+        )
 
     @recreate_overview_html
     @check_testbed_existence

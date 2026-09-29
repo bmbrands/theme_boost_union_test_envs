@@ -38,7 +38,6 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     # at the temp dir so nothing touches the real working directory.
     monkeypatch.setattr(user_store_mod, "config", lambda: fake)
     monkeypatch.setattr(security_mod, "config", lambda: fake)
-    monkeypatch.setattr(infra_mod, "config", lambda: fake)
     # Keep the protected-endpoint smoke test hermetic: no real testbed reads.
     monkeypatch.setattr(infra_mod, "yaml_parser", lambda: _FakeYamlParser())
 
