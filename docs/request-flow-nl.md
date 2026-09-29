@@ -1,4 +1,4 @@
-# Hoe een request naar `http://192.168.2.25/mont-test/5.1.4/` werkt
+# Hoe een request naar `http://192.168.2.17/mont-test/5.1.4/` werkt
 
 Hieronder loop ik de hele keten door, in de volgorde waarin het request reist.
 
@@ -7,11 +7,11 @@ Hieronder loop ik de hele keten door, in de volgorde waarin het request reist.
 ## 0. Vertrekpunt — de URL
 
 ```
-http://192.168.2.25/mont-test/5.1.4/
+http://192.168.2.17/mont-test/5.1.4/
 └── host ──┘└─ infra ─┘└─ver┘
 ```
 
-`192.168.2.25` is `nucky` (Debian 13). Poort 80, want `http://`. Geen
+`192.168.2.17` is `nucky` (Debian 13). Poort 80, want `http://`. Geen
 poortnummer in de URL — dat is precies het hele punt van deze opzet.
 
 ---
@@ -26,10 +26,10 @@ De vhost die nginx laadt is een symlink:
 
 ```
 /etc/nginx/sites-enabled/boost-union
-   → /opt/boost-union-envs/backend/example_pwd/.nginx/192.168.2.25.conf
+   → /opt/boost-union-envs/backend/example_pwd/.nginx/192.168.2.17.conf
 ```
 
-Die `192.168.2.25.conf` is **niet handgeschreven** — hij is gegenereerd
+Die `192.168.2.17.conf` is **niet handgeschreven** — hij is gegenereerd
 door de Python backend uit het template
 [`nucky_production_nginx.conf`](../theme_boost_union_test_envs/cross_cutting/templates/nucky_production_nginx.conf)
 (geselecteerd via `nginx.template:` in [env.nucky.yml](../env.nucky.yml)).
@@ -164,10 +164,10 @@ Voor onze env zet de Python backend in de `environment:` sectie van
 
 | Variabele in container | Waarde |
 |:---|:---|
-| `MOODLE_DOCKER_WEB_HOST` | `192.168.2.25/mont-test/5.1.4` |
+| `MOODLE_DOCKER_WEB_HOST` | `192.168.2.17/mont-test/5.1.4` |
 | `MOODLE_DOCKER_WEB_PORT` | `""` (leeg!) |
 
-Dus binnen de container: `$CFG->wwwroot = "http://192.168.2.25/mont-test/5.1.4"`.
+Dus binnen de container: `$CFG->wwwroot = "http://192.168.2.17/mont-test/5.1.4"`.
 Dat klopt **exact** met wat de gebruiker intypt → Moodle is tevreden, geen
 redirect.
 
@@ -192,10 +192,10 @@ install/login pagina.
 
 ```
 Browser
-  │  GET http://192.168.2.25/mont-test/5.1.4/
+  │  GET http://192.168.2.17/mont-test/5.1.4/
   ▼
 nginx  (host nucky, port 80)
-  │  vhost: example_pwd/.nginx/192.168.2.25.conf
+  │  vhost: example_pwd/.nginx/192.168.2.17.conf
   │  matches: location /mont-test/5.1.4
   │  proxy_pass http://127.0.0.1:47833   (URI ongewijzigd)
   ▼
@@ -206,7 +206,7 @@ Apache  (in moodle webserver container)
   │  conf-enabled/moodle-prefix.conf  (bind-mount uit apache-prefix.conf)
   ▼
 PHP / Moodle  index.php
-  │  $CFG->wwwroot = http://192.168.2.25/mont-test/5.1.4
+  │  $CFG->wwwroot = http://192.168.2.17/mont-test/5.1.4
   │  (MOODLE_DOCKER_WEB_PORT="" → geen poort in URL)
   ▼
 HTML response  →  Apache  →  nginx  →  Browser

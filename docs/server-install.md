@@ -12,7 +12,7 @@ The end result of this guide is:
 - A `boost-union-api` systemd unit running uvicorn on `127.0.0.1:8000`.
 - Docker CE for the per-Moodle compose stacks.
 
-The screenshots / examples use the host nucky (`192.168.2.25`); replace that
+The screenshots / examples use the host nucky (`192.168.2.17`); replace that
 value with your own host or IP.
 
 ---
@@ -107,7 +107,7 @@ or IP (or rename the file to match your host and update the reference in
 working_dir: "./example_pwd"
 proxied: yes
 nginx:
-  base_url: "192.168.2.25"
+  base_url: "192.168.2.17"
   scheme: "http"
   template: "nucky_production_nginx.conf"
   cert_chain_path: ""
@@ -222,7 +222,7 @@ from theme_boost_union_test_envs.app import bootstrap
 container = bootstrap()
 container.template_engine().overview_nginx_config()
 PY
-ls example_pwd/.nginx/         # -> 192.168.2.25.conf  testenvs/
+ls example_pwd/.nginx/         # -> 192.168.2.17.conf  testenvs/
 ```
 
 > If `bootstrap()` is not exposed in your build, you can call
@@ -243,7 +243,7 @@ ln -snf /opt/boost-union-envs/backend/example_pwd/.nginx/testenvs \
 # Outer vhost:
 ln -snf /opt/boost-union-envs/backend/example_pwd/.nginx/<host>.conf \
         /etc/nginx/sites-enabled/boost-union
-#   replace <host> with the file actually rendered, e.g. 192.168.2.25.conf
+#   replace <host> with the file actually rendered, e.g. 192.168.2.17.conf
 
 rm -f /etc/nginx/sites-enabled/default
 nginx -t                                 # syntax: ok

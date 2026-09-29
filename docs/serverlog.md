@@ -1,6 +1,6 @@
-# Server Deployment Log — nucky (192.168.2.25)
+# Server Deployment Log — nucky (192.168.2.17)
 
-Target: Debian 13 (`nucky`), accessed as `root@192.168.2.25` over SSH (key-based,
+Target: Debian 13 (`nucky`), accessed as `root@192.168.2.17` over SSH (key-based,
 no password).
 Goal: Run the Python FastAPI backend (branch `feature/fastapi`) and serve the
 React frontend (branch `dev`) via the system Apache on port 80.
@@ -15,7 +15,7 @@ React frontend (branch `dev`) via the system Apache on port 80.
 | `/opt/boost-union-envs/deploy.sh` | Helper: `git pull` + restart for `backend` / `frontend` / `all` |
 | `/var/www/html` | Symlink → `/opt/boost-union-envs/frontend/dist` |
 | `/etc/systemd/system/boost-union-api.service` | systemd unit for `uvicorn` |
-| `/etc/nginx/sites-enabled/boost-union` | Symlink → rendered vhost (`example_pwd/.nginx/192.168.2.25.conf`) |
+| `/etc/nginx/sites-enabled/boost-union` | Symlink → rendered vhost (`example_pwd/.nginx/192.168.2.17.conf`) |
 | `/etc/nginx/conf.d/boost-union/testenvs` | Symlink → per-Moodle proxy snippets (`example_pwd/.nginx/testenvs/`) |
 
 Apache listens on port 80, serves the SPA from `/var/www/html`, falls back to
@@ -30,16 +30,16 @@ Apache listens on port 80, serves the SPA from `/var/www/html`, falls back to
 
 ## End URLs
 
-- Frontend SPA: <http://192.168.2.25/>
-- API: <http://192.168.2.25/api/infrastructures>
-- Swagger UI: <http://192.168.2.25/docs>
+- Frontend SPA: <http://192.168.2.17/>
+- API: <http://192.168.2.17/api/infrastructures>
+- Swagger UI: <http://192.168.2.17/docs>
 
 ---
 
 ## 1. Connectivity check
 
 ```bash
-ssh -o StrictHostKeyChecking=accept-new root@192.168.2.25 \
+ssh -o StrictHostKeyChecking=accept-new root@192.168.2.17 \
     "uname -a && cat /etc/debian_version && whoami"
 # -> Linux nucky 6.12.74+deb13+1-amd64 ... Debian 13.4, user: root
 ```
@@ -47,12 +47,12 @@ ssh -o StrictHostKeyChecking=accept-new root@192.168.2.25 \
 ## 2. Install base system packages
 
 ```bash
-ssh root@192.168.2.25 "set -e; export DEBIAN_FRONTEND=noninteractive; \
+ssh root@192.168.2.17 "set -e; export DEBIAN_FRONTEND=noninteractive; \
     apt-get update -qq && \
     apt-get install -y -qq ca-certificates curl gnupg rsync apache2 \
                             python3 python3-venv python3-pip git"
 
-ssh root@192.168.2.25 "python3 --version && which apache2 && which rsync && which git"
+ssh root@192.168.2.17 "python3 --version && which apache2 && which rsync && which git"
 # Python 3.13.5
 # /usr/sbin/apache2  /usr/bin/rsync  /usr/bin/git
 ```
@@ -60,7 +60,7 @@ ssh root@192.168.2.25 "python3 --version && which apache2 && which rsync && whic
 ## 3. Install Docker CE (official Docker apt repository)
 
 ```bash
-ssh root@192.168.2.25 'set -e
+ssh root@192.168.2.17 'set -e
 install -m 0755 -d /etc/apt/keyrings
 curl -fsSL https://download.docker.com/linux/debian/gpg \
      -o /etc/apt/keyrings/docker.asc
@@ -74,7 +74,7 @@ apt-get update -qq
 apt-get install -y -qq docker-ce docker-ce-cli containerd.io \
                        docker-buildx-plugin docker-compose-plugin'
 
-ssh root@192.168.2.25 "docker --version && docker compose version && systemctl is-active docker"
+ssh root@192.168.2.17 "docker --version && docker compose version && systemctl is-active docker"
 # Docker version 29.4.1
 # Docker Compose version v5.1.3
 # active
@@ -87,7 +87,7 @@ branch `feature/fastapi`. The repo is public, so HTTPS clone needs no auth on
 the server (no SSH deploy key required).
 
 ```bash
-ssh root@192.168.2.25 "set -e
+ssh root@192.168.2.17 "set -e
 mkdir -p /opt/boost-union-envs
 git clone --branch feature/fastapi --depth 1 \
     https://github.com/bmbrands/theme_boost_union_test_envs.git \
@@ -96,13 +96,13 @@ git clone --branch feature/fastapi --depth 1 \
 # Runtime files that must not be tracked by the working tree:
 cd /opt/boost-union-envs/backend
 # env.local.yml is committed, but holds host-specific values on the server
-# (base_url: 192.168.2.25). Tell git to keep the local copy:
+# (base_url: 192.168.2.17). Tell git to keep the local copy:
 git update-index --skip-worktree env.local.yml
 # example_pwd/ contains live testbed state managed by the app itself:
 echo /example_pwd/ >> .git/info/exclude"
 ```
 
-Then edit `env.local.yml` on the server and set `base_url: "192.168.2.25"` so
+Then edit `env.local.yml` on the server and set `base_url: "192.168.2.17"` so
 the API hands out reachable URLs to LAN clients.
 
 ## 5. Clone and build the frontend on the server
@@ -112,7 +112,7 @@ deploy flow is uniform (`git pull && build`). Node 20 / npm 9 are available
 from Debian 13 apt:
 
 ```bash
-ssh root@192.168.2.25 "set -e
+ssh root@192.168.2.17 "set -e
 apt-get install -y -qq nodejs npm
 git clone --branch dev --depth 1 \
     https://github.com/bmbrands/moodle-provisioner-frontend.git \
@@ -132,7 +132,7 @@ server. The runtime dependencies needed for the FastAPI backend are installed
 directly with `pip` into a system-Python virtualenv:
 
 ```bash
-ssh root@192.168.2.25 "set -e
+ssh root@192.168.2.17 "set -e
 cd /opt/boost-union-envs
 python3 -m venv venv
 ./venv/bin/pip install --upgrade pip wheel -q
@@ -145,7 +145,7 @@ python3 -m venv venv
 Verify the FastAPI app imports cleanly:
 
 ```bash
-ssh root@192.168.2.25 "cd /opt/boost-union-envs/backend && \
+ssh root@192.168.2.17 "cd /opt/boost-union-envs/backend && \
     /opt/boost-union-envs/venv/bin/python \
     -c 'from theme_boost_union_test_envs.ui.api.server import app; print(app.title)'"
 # -> Boost Union Test Environments API
@@ -177,13 +177,13 @@ WantedBy=multi-user.target
 Enable and start:
 
 ```bash
-ssh root@192.168.2.25 'systemctl daemon-reload && \
+ssh root@192.168.2.17 'systemctl daemon-reload && \
     systemctl enable --now boost-union-api && \
     systemctl is-active boost-union-api'
 # -> active
 
 # Smoke-test directly against uvicorn (loopback only):
-ssh root@192.168.2.25 'curl -sS -o /dev/null -w "%{http_code}\n" \
+ssh root@192.168.2.17 'curl -sS -o /dev/null -w "%{http_code}\n" \
     http://127.0.0.1:8000/api/infrastructures'
 # -> 200
 ```
@@ -209,17 +209,17 @@ by `TemplateEngine.overview_nginx_config()`. The template is selected via
 `nginx.template: "nucky_production_nginx.conf"` in [env.nucky.yml](../env.nucky.yml).
 
 ```bash
-ssh root@192.168.2.25 'apt-get install -y -qq nginx'
+ssh root@192.168.2.17 'apt-get install -y -qq nginx'
 
 # Switch backend to env.nucky.yml so URLs become path-based (no port):
-ssh root@192.168.2.25 \
+ssh root@192.168.2.17 \
   'sed -i "s|^environment:.*|environment: \"env.nucky.yml\"|" \
    /opt/boost-union-envs/backend/config.yml'
 
-# Render the outer vhost into ./example_pwd/.nginx/192.168.2.25.conf:
+# Render the outer vhost into ./example_pwd/.nginx/192.168.2.17.conf:
 scp /tmp/render_outer_nginx.py \
-    root@192.168.2.25:/opt/boost-union-envs/backend/
-ssh root@192.168.2.25 \
+    root@192.168.2.17:/opt/boost-union-envs/backend/
+ssh root@192.168.2.17 \
   'cd /opt/boost-union-envs/backend && \
    /opt/boost-union-envs/venv/bin/python render_outer_nginx.py && \
    rm render_outer_nginx.py'
@@ -229,11 +229,11 @@ Wire it into nginx (the include path inside the rendered vhost is
 `/etc/nginx/conf.d/boost-union/testenvs/*.conf` — provided by symlink):
 
 ```bash
-ssh root@192.168.2.25 "set -e
+ssh root@192.168.2.17 "set -e
 mkdir -p /etc/nginx/conf.d/boost-union
 ln -snf /opt/boost-union-envs/backend/example_pwd/.nginx/testenvs \
         /etc/nginx/conf.d/boost-union/testenvs
-ln -snf /opt/boost-union-envs/backend/example_pwd/.nginx/192.168.2.25.conf \
+ln -snf /opt/boost-union-envs/backend/example_pwd/.nginx/192.168.2.17.conf \
         /etc/nginx/sites-enabled/boost-union
 rm -f /etc/nginx/sites-enabled/default
 nginx -t
@@ -248,11 +248,11 @@ The rendered vhost serves the SPA, proxies `/api/` to FastAPI, and (via
 `include "/etc/nginx/conf.d/boost-union/testenvs/*.conf";`) picks up every
 per-Moodle `.conf` snippet that the Python app writes when a new Moodle
 environment is created. Newly-created Moodles are reachable as
-`http://192.168.2.25/<infra>/<version>/` — no port number.
+`http://192.168.2.17/<infra>/<version>/` — no port number.
 
 > **Existing infrastructures**: `nucky-one` was created under
 > `env.local.yml` (proxied=no), so its container's `wwwroot` still contains
-> the explicit port (`http://192.168.2.25:47833/`). To migrate it to the
+> the explicit port (`http://192.168.2.17:47833/`). To migrate it to the
 > path-based URL it must be re-created after the env switch.
 
 ### Optional: expose to the internet via ngrok
@@ -260,7 +260,7 @@ environment is created. Newly-created Moodles are reachable as
 Because everything is on port 80, a single tunnel is enough:
 
 ```bash
-ssh root@192.168.2.25 'ngrok http 80'
+ssh root@192.168.2.17 'ngrok http 80'
 ```
 
 The ngrok URL works for the SPA, the API, the Swagger UI **and** any new
@@ -271,7 +271,7 @@ Moodle environments — all through the one nginx entry point.
 Required modules:
 
 ```bash
-ssh root@192.168.2.25 'a2enmod proxy proxy_http headers rewrite'
+ssh root@192.168.2.17 'a2enmod proxy proxy_http headers rewrite'
 ```
 
 `/etc/apache2/sites-available/boost-union.conf`:
@@ -317,9 +317,9 @@ Activate and reload:
 # Config file shipped via scp from the dev machine (heredoc-over-ssh
 # corrupts indentation — always scp Apache configs):
 scp /tmp/boost-union.conf \
-    root@192.168.2.25:/etc/apache2/sites-available/boost-union.conf
+    root@192.168.2.17:/etc/apache2/sites-available/boost-union.conf
 
-ssh root@192.168.2.25 'a2dissite 000-default >/dev/null 2>&1; \
+ssh root@192.168.2.17 'a2dissite 000-default >/dev/null 2>&1; \
     a2ensite boost-union >/dev/null && \
     apache2ctl configtest && \
     systemctl reload apache2'
@@ -329,22 +329,22 @@ ssh root@192.168.2.25 'a2dissite 000-default >/dev/null 2>&1; \
 ## 9. End-to-end verification
 
 ```bash
-curl -s -o /dev/null -w "frontend: %{http_code}\n" http://192.168.2.25/
+curl -s -o /dev/null -w "frontend: %{http_code}\n" http://192.168.2.17/
 # frontend: 200
 
-curl -s -o /dev/null -w "api: %{http_code}\n"      http://192.168.2.25/api/infrastructures
+curl -s -o /dev/null -w "api: %{http_code}\n"      http://192.168.2.17/api/infrastructures
 # api: 200
 
-curl -s -o /dev/null -w "docs: %{http_code}\n"     http://192.168.2.25/docs
+curl -s -o /dev/null -w "docs: %{http_code}\n"     http://192.168.2.17/docs
 # docs: 200
 
-curl -s http://192.168.2.25/api/infrastructures | head -c 200
+curl -s http://192.168.2.17/api/infrastructures | head -c 200
 # {"infrastructures":[{"name":"testme","git_ref_type":"BRANCH", ...}
 ```
 
-The React app is now live at <http://192.168.2.25/>, talks to FastAPI through
+The React app is now live at <http://192.168.2.17/>, talks to FastAPI through
 the same origin (no CORS issues), and the Swagger UI is reachable at
-<http://192.168.2.25/docs>.
+<http://192.168.2.17/docs>.
 
 ---
 
@@ -352,17 +352,17 @@ the same origin (no CORS issues), and the Swagger UI is reachable at
 
 - Restart backend after code changes:
   ```bash
-  ssh root@192.168.2.25 'systemctl restart boost-union-api'
+  ssh root@192.168.2.17 'systemctl restart boost-union-api'
   ```
 - Tail backend logs:
   ```bash
-  ssh root@192.168.2.25 'journalctl -u boost-union-api -f -n 100'
+  ssh root@192.168.2.17 'journalctl -u boost-union-api -f -n 100'
   ```
 - Re-deploy from git (run on the server):
   ```bash
-  ssh root@192.168.2.25 '/opt/boost-union-envs/deploy.sh'           # both
-  ssh root@192.168.2.25 '/opt/boost-union-envs/deploy.sh backend'   # only api
-  ssh root@192.168.2.25 '/opt/boost-union-envs/deploy.sh frontend'  # only spa
+  ssh root@192.168.2.17 '/opt/boost-union-envs/deploy.sh'           # both
+  ssh root@192.168.2.17 '/opt/boost-union-envs/deploy.sh backend'   # only api
+  ssh root@192.168.2.17 '/opt/boost-union-envs/deploy.sh frontend'  # only spa
   ```
   The script does `git pull --ff-only`, restarts `boost-union-api`, and
   re-runs `npx vite build` for the frontend. If `pyproject.toml` changed it
@@ -427,7 +427,7 @@ $CFG->wwwroot = "http://" . MOODLE_DOCKER_WEB_HOST
 ```
 
 For the path-based layout `MOODLE_DOCKER_WEB_HOST` already contains the
-prefix (`192.168.2.25/<infra>/<version>`) and there is no port in the
+prefix (`192.168.2.17/<infra>/<version>`) and there is no port in the
 public URL. We override `MOODLE_DOCKER_WEB_PORT=""` at runtime via the env
 section of the per-env `local.yml` so the port branch is skipped. The
 **compose-time** `${MOODLE_DOCKER_WEB_PORT}` from `.env` (used to bind
@@ -478,22 +478,21 @@ The active config on the server is [`env.nucky.yml`](../env.nucky.yml)
 
 ```bash
 # create
-curl -sS -X POST http://192.168.2.25/api/infrastructures \
+curl -sS -X POST http://192.168.2.17/api/infrastructures \
   -H 'content-type: application/json' \
   -d '{"name":"mont-test","git_ref":"MOODLE_501_STABLE",
        "git_ref_type":"branch","moodle_versions":["5.1.4"]}'
 
 # start
-curl -sS -X POST http://192.168.2.25/api/infrastructures/mont-test/5.1.4/start
+curl -sS -X POST http://192.168.2.17/api/infrastructures/mont-test/5.1.4/start
 
 # verify
-ssh root@192.168.2.25 \
+ssh root@192.168.2.17 \
   "docker exec mont-test-5_1_4-webserver-1 sh -c \
    'echo HOST=\$MOODLE_DOCKER_WEB_HOST PORT=\"\$MOODLE_DOCKER_WEB_PORT\"'"
-# -> HOST=192.168.2.25/mont-test/5.1.4 PORT=
+# -> HOST=192.168.2.17/mont-test/5.1.4 PORT=
 
 curl -sS -o /dev/null -w '%{http_code} -> %{redirect_url}\n' \
-  http://192.168.2.25/mont-test/5.1.4/
+  http://192.168.2.17/mont-test/5.1.4/
 # -> 200 ->         (Moodle install page; no redirect)
 ```
-
