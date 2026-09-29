@@ -11,6 +11,12 @@ class MoodleContainerResponse(BaseModel):
     created_at: str
 
 
+class InfrastructureOwner(BaseModel):
+    id: str
+    name: str
+    email: str
+
+
 class InfrastructureResponse(BaseModel):
     name: str
     git_ref_type: str
@@ -19,6 +25,8 @@ class InfrastructureResponse(BaseModel):
     moodles: list[MoodleContainerResponse]
     # The plugin (supported-plugins.yml key) this infrastructure was built for.
     plugin: str = ""
+    # The user who created the infrastructure, when known.
+    created_by: InfrastructureOwner | None = None
     # When the infrastructure is still being provisioned, this reports the
     # current phase (reserving / cloning / building / initializing / error).
     # Empty/None when the infrastructure is ready.

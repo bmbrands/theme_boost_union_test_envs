@@ -249,6 +249,55 @@ ls -l /etc/nginx/plesk.conf.d/vhosts/boost_union_testsystem
 sudo nginx -t && sudo nginx -s reload
 ```
 
+**Newly built env 404s inside the container (stale `.moodle-docker/local.yml`)**
+
+Symptom: nginx is configured correctly and the container is up, but the bare
+`/<infra>/<version>/` URL still 404s (or redirects to the bare host). Inside the
+container, `MOODLE_DOCKER_WEB_PORT` is *not* empty and
+`/etc/apache2/conf-enabled/moodle-prefix.conf` is **not** mounted — even though
+`apache-prefix.conf` exists in the env directory and `config.php` already
+carries the `sslproxy`/`reverseproxy` override.
+
+Root cause: the per-version `local.yml` is rendered from the **clone copy** at
+`example_pwd/.moodle-docker/local.yml`, *not* from the package template under
+`theme_boost_union_test_envs/cross_cutting/templates/`. That clone copy is
+seeded **once**, the first time `.moodle-docker` is cloned (see
+`Testbed` in `domain/testbed.py`, guarded by
+`if not self.docker_repo_dir.exists()`). Redeploying the backend updates the
+package template but **never re-seeds the clone**. If the clone was created
+before the `$REPLACE_PROXY_OVERRIDES` line was added to the template, every new
+env is built from the stale copy:
+
+```yaml
+# stale clone copy — missing the override placeholder
+version: "2"
+services:
+  webserver:
+    volumes:
+      - "$REPLACE_PLUGIN_SOURCE_PATH:/var/www/html/$REPLACE_WEBROOT_PREFIX$REPLACE_PLUGIN_INSTALL_DIR:cached"
+# $REPLACE_PROXY_OVERRIDES   ← absent, so safe_substitute injects nothing
+```
+
+Because the placeholder line is absent, `safe_substitute` has nothing to fill,
+so the rendered `local.yml` never gets the Apache-alias mount or the
+`MOODLE_DOCKER_WEB_PORT: ""` override — hence the 404. The `apache-prefix.conf`
+file and the `config.php` patch still look correct because they come from
+current code, which is what makes this confusing to diagnose.
+
+Fix: re-seed the clone copy from the current package template, then delete and
+rebuild affected envs:
+
+```bash
+cd /opt/boost-union-envs/backend
+sudo cp theme_boost_union_test_envs/cross_cutting/templates/local.yml \
+        example_pwd/.moodle-docker/local.yml
+# verify the placeholder is present
+grep REPLACE_PROXY_OVERRIDES example_pwd/.moodle-docker/local.yml
+```
+
+Any environment built **before** the re-seed must be torn down and rebuilt — the
+stale `local.yml` is already baked into its `moodles/<version>/` directory.
+
 **Let's Encrypt rate limit**
 The Plesk subscription uses Let's Encrypt; the production certificate is
 renewed by Plesk. Manual renewals via `certbot` are rate-limited to a few
