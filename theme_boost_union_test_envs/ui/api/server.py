@@ -8,6 +8,7 @@ from .routes import (
     audit_router,
     auth_router,
     infrastructures_router,
+    lifecycle_router,
     logs_router,
     moodle_router,
     plugins_router,
@@ -52,6 +53,7 @@ def create_app() -> FastAPI:
     app.include_router(moodle_router, dependencies=protected)
     app.include_router(audit_router, dependencies=protected)
     app.include_router(settings_router, dependencies=protected)
+    app.include_router(lifecycle_router, dependencies=protected)
     app.include_router(logs_router, dependencies=protected)
     # Users router carries its own admin guard on every route.
     app.include_router(users_router)

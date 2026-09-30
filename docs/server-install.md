@@ -371,6 +371,17 @@ values:
 > All times are interpreted as **UTC**. "Stop" preserves the instance's data;
 > "cleanup" **destroys** the instance (and its data) to reclaim disk.
 
+A running instance is stopped at whichever comes first: `max_runtime_minutes`
+after it was started, or the first `daily_stop_time` *after* it was started (so
+an instance started in the evening runs until the next day's stop time, not
+until the next reaper run). Stopped instances, and instances created but never
+started, are destroyed `stopped_retention_days` after they were stopped.
+
+The frontend shows each instance's **Auto stop** / **Auto delete** time below
+its creation date, with a help icon explaining the policy. The same rules are
+served by `GET /api/lifecycle` (policy) and the `auto_stop_at` /
+`auto_delete_at` fields of `GET /api/infrastructures`.
+
 ### Schedule it
 
 Run the reaper from the **backend directory** (so `config.yml` / the active

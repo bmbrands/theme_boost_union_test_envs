@@ -20,6 +20,7 @@ from theme_boost_union_test_envs.domain import lifecycle
 from theme_boost_union_test_envs.domain.lifecycle import (
     Action,
     LifecyclePolicy,
+    compute_deadlines,
     execute,
     plan_actions,
     policy_from_values,
@@ -116,13 +117,69 @@ def test_stop_at_daily_stop_time() -> None:
     policy = LifecyclePolicy(
         auto_stop_enabled=True, max_runtime_minutes=100000, daily_stop_time="10:00"
     )
+    # Started at 09:00, NOW is 12:00 UTC: today's 10:00 boundary has passed.
     tb = _testbed(
-        {"5.0.0": {"status": "STARTED", "started_at": _ts(NOW - timedelta(minutes=5))}}
+        {"5.0.0": {"status": "STARTED", "started_at": _ts(NOW - timedelta(hours=3))}}
     )
-    # NOW is 12:00 UTC, past the 10:00 stop time.
     actions = plan_actions(tb, policy, NOW)
     assert [a.kind for a in actions] == ["stop"]
     assert "daily stop time" in actions[0].reason
+
+
+def test_no_stop_when_started_after_daily_stop_time() -> None:
+    policy = LifecyclePolicy(
+        auto_stop_enabled=True, max_runtime_minutes=100000, daily_stop_time="10:00"
+    )
+    # Started at 11:55, after today's 10:00 boundary: runs until tomorrow 10:00.
+    tb = _testbed(
+        {"5.0.0": {"status": "STARTED", "started_at": _ts(NOW - timedelta(minutes=5))}}
+    )
+    assert plan_actions(tb, policy, NOW) == []
+    assert plan_actions(tb, policy, NOW + timedelta(hours=22)) != []
+
+
+def test_deadlines_use_earlier_of_runtime_and_daily_stop() -> None:
+    started = NOW - timedelta(minutes=5)  # 11:55
+    moodle = {"status": "STARTED", "started_at": _ts(started)}
+    runtime_first = LifecyclePolicy(
+        auto_stop_enabled=True, max_runtime_minutes=60, daily_stop_time="10:00"
+    )
+    d = compute_deadlines(moodle, {}, runtime_first)
+    assert d.auto_stop_at == started + timedelta(minutes=60)
+    assert d.stop_reason == "runtime"
+
+    daily_first = LifecyclePolicy(
+        auto_stop_enabled=True, max_runtime_minutes=100000, daily_stop_time="10:00"
+    )
+    d = compute_deadlines(moodle, {}, daily_first)
+    assert d.auto_stop_at == datetime(2026, 1, 11, 10, 0, 0)
+    assert d.stop_reason == "daily"
+    assert d.auto_delete_at is None
+
+
+def test_deadlines_retention_and_disabled() -> None:
+    stopped = NOW - timedelta(days=1)
+    moodle = {"status": "STOPPED", "stopped_at": _ts(stopped)}
+    d = compute_deadlines(
+        moodle, {}, LifecyclePolicy(auto_cleanup_enabled=True, stopped_retention_days=7)
+    )
+    assert d.auto_delete_at == stopped + timedelta(days=7)
+    assert d.auto_stop_at is None
+
+    d = compute_deadlines(moodle, {}, LifecyclePolicy())
+    assert d.auto_stop_at is None and d.auto_delete_at is None
+
+
+def test_destroy_created_but_never_started_instance() -> None:
+    policy = LifecyclePolicy(
+        auto_cleanup_enabled=True,
+        stopped_retention_days=7,
+        cleanup_empty_infrastructures=False,
+    )
+    # No stopped_at: falls back to the infra's last_modified_at (30 days ago).
+    tb = _testbed({"5.0.0": {"status": "CREATED"}})
+    actions = plan_actions(tb, policy, NOW)
+    assert [(a.kind, a.version) for a in actions] == [("destroy", "5.0.0")]
 
 
 def test_stop_falls_back_to_infra_timestamp_when_started_at_missing() -> None:

@@ -9,6 +9,10 @@ class MoodleContainerResponse(BaseModel):
     www_port: str
     db_port: str
     created_at: str
+    # Lifecycle deadlines (ISO-8601 UTC with "Z"), or None when automation is
+    # disabled or does not apply to the current status.
+    auto_stop_at: str | None = None
+    auto_delete_at: str | None = None
 
 
 class InfrastructureOwner(BaseModel):

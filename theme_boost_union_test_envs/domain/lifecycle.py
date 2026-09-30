@@ -23,6 +23,8 @@ from typing import Any, Callable
 # Status strings the provisioner writes into infrastructure.yaml.
 STATUS_STARTED = "STARTED"
 STATUS_STOPPED = "STOPPED"
+# Provisioned but never started; idle just like a stopped instance.
+STATUS_CREATED = "CREATED"
 
 
 # ---------------------------------------------------------------------------
@@ -166,6 +168,90 @@ def _parse_hhmm(value: str) -> time | None:
         return None
 
 
+def _next_daily_boundary(after: datetime, stop_time: time) -> datetime:
+    """First occurrence of ``stop_time`` strictly after ``after`` (naive UTC)."""
+    candidate = datetime.combine(after.date(), stop_time)
+    if candidate <= after:
+        candidate += timedelta(days=1)
+    return candidate
+
+
+@dataclass
+class Deadlines:
+    """When an instance will be auto-stopped / auto-destroyed (naive UTC).
+
+    ``stop_reason`` is ``"runtime"`` or ``"daily"`` depending on which limit
+    determines ``auto_stop_at``.
+    """
+
+    auto_stop_at: datetime | None = None
+    stop_reason: str = ""
+    started: datetime | None = None
+    auto_delete_at: datetime | None = None
+
+
+def compute_deadlines(
+    moodle: dict[str, Any],
+    infra: dict[str, Any],
+    policy: LifecyclePolicy,
+) -> Deadlines:
+    """Compute the lifecycle deadlines of a single moodle record.
+
+    Pure. A running instance is stopped at the earlier of ``started +
+    max_runtime`` and the first daily stop time *after* it was started, so an
+    instance started after today's stop time runs until tomorrow's. A stopped
+    instance (or one created but never started) is destroyed
+    ``stopped_retention_days`` after it was stopped.
+    Deadlines are ``None`` when the relevant automation is disabled, the
+    status does not apply, or no usable timestamp exists.
+    """
+    result = Deadlines()
+    status = moodle.get("status")
+    infra_modified = infra.get("last_modified_at")
+
+    if policy.auto_stop_enabled and status == STATUS_STARTED:
+        started = _first_ts(
+            moodle.get("started_at"), infra_modified, infra.get("created_at")
+        )
+        if started is not None:
+            result.started = started
+            max_runtime = timedelta(minutes=max(0, policy.max_runtime_minutes))
+            result.auto_stop_at = started + max_runtime
+            result.stop_reason = "runtime"
+            stop_time = (
+                _parse_hhmm(policy.daily_stop_time) if policy.daily_stop_time else None
+            )
+            if stop_time is not None:
+                daily = _next_daily_boundary(started, stop_time)
+                if daily < result.auto_stop_at:
+                    result.auto_stop_at = daily
+                    result.stop_reason = "daily"
+
+    if policy.auto_cleanup_enabled and status in (STATUS_STOPPED, STATUS_CREATED):
+        stopped = _first_ts(
+            moodle.get("stopped_at"), infra_modified, moodle.get("created_at")
+        )
+        if stopped is not None:
+            retention = timedelta(days=max(0, policy.stopped_retention_days))
+            result.auto_delete_at = stopped + retention
+
+    return result
+
+
+def policy_summary(policy: LifecyclePolicy) -> dict[str, Any]:
+    """Serialisable view of the policy for the API / frontend help text."""
+    return {
+        "auto_stop_enabled": policy.auto_stop_enabled,
+        "max_runtime_minutes": policy.max_runtime_minutes,
+        "daily_stop_time": policy.daily_stop_time
+        if _parse_hhmm(policy.daily_stop_time or "")
+        else "",
+        "auto_cleanup_enabled": policy.auto_cleanup_enabled,
+        "stopped_retention_days": policy.stopped_retention_days,
+        "cleanup_empty_infrastructures": policy.cleanup_empty_infrastructures,
+    }
+
+
 def plan_actions(
     testbed_info: dict[str, Any],
     policy: LifecyclePolicy,
@@ -182,10 +268,6 @@ def plan_actions(
     elif now.tzinfo is not None:
         now = now.astimezone(timezone.utc).replace(tzinfo=None)
 
-    max_runtime = timedelta(minutes=max(0, policy.max_runtime_minutes))
-    retention = timedelta(days=max(0, policy.stopped_retention_days))
-    stop_time = _parse_hhmm(policy.daily_stop_time) if policy.daily_stop_time else None
-
     actions: list[Action] = []
 
     for infra_name, infra in (testbed_info or {}).items():
@@ -195,9 +277,6 @@ def plan_actions(
         if not isinstance(moodles, dict):
             continue
 
-        infra_modified = infra.get("last_modified_at")
-        infra_created = infra.get("created_at")
-
         all_versions = [str(v) for v in moodles.keys()]
         to_destroy: list[str] = []
 
@@ -205,34 +284,25 @@ def plan_actions(
             if not isinstance(moodle, dict):
                 continue
             version = str(version)
-            status = moodle.get("status")
+            deadlines = compute_deadlines(moodle, infra, policy)
 
             # --- auto-stop: running past runtime / daily stop time ----------
-            if policy.auto_stop_enabled and status == STATUS_STARTED:
-                started = _first_ts(
-                    moodle.get("started_at"), infra_modified, infra_created
-                )
-                stop = False
-                reason = ""
-                if started is not None and now - started > max_runtime:
-                    stop = True
+            if deadlines.auto_stop_at is not None and now >= deadlines.auto_stop_at:
+                if deadlines.stop_reason == "daily":
+                    reason = f"past daily stop time {policy.daily_stop_time} UTC"
+                else:
                     reason = (
-                        f"running for {now - started} "
+                        f"running for {now - deadlines.started} "
                         f"(> {policy.max_runtime_minutes}m max runtime)"
                     )
-                elif stop_time is not None and now.time() >= stop_time:
-                    stop = True
-                    reason = f"past daily stop time {policy.daily_stop_time} UTC"
-                if stop:
-                    actions.append(
-                        Action("stop", infra_name, version, reason)
-                    )
+                actions.append(Action("stop", infra_name, version, reason))
 
             # --- auto-cleanup: stopped/idle past retention -----------------
-            if policy.auto_cleanup_enabled and status == STATUS_STOPPED:
-                stopped = _first_ts(moodle.get("stopped_at"), infra_modified)
-                if stopped is not None and now - stopped > retention:
-                    to_destroy.append(version)
+            if (
+                deadlines.auto_delete_at is not None
+                and now >= deadlines.auto_delete_at
+            ):
+                to_destroy.append(version)
 
         # If every moodle in the infra is being cleaned up, tear the whole
         # infrastructure down in one go instead of per-moodle destroys.

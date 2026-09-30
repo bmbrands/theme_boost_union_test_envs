@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 
 from theme_boost_union_test_envs.cross_cutting import yaml_parser
 from theme_boost_union_test_envs.cross_cutting.logger import log
+from theme_boost_union_test_envs.domain import lifecycle
 from ..models import (
     InfrastructureListResponse,
     InfrastructureOwner,
@@ -75,10 +76,16 @@ class CreateInfrastructureResponse(BaseModel):
     name: str
 
 
+def _utc_iso(value: datetime | None) -> str | None:
+    """Render a naive-UTC datetime as ISO-8601 with an explicit ``Z``."""
+    return value.strftime("%Y-%m-%dT%H:%M:%SZ") if value is not None else None
+
+
 @router.get("", response_model=InfrastructureListResponse)
 def list_infrastructures() -> InfrastructureListResponse:
     """List all infrastructures and their Moodle containers."""
     raw = yaml_parser().load_testbed_info()
+    policy = lifecycle.load_policy()
 
     infrastructures = []
     for name, data in raw.items():
@@ -90,6 +97,7 @@ def list_infrastructures() -> InfrastructureListResponse:
             # Map backend status names to frontend-friendly names
             status_map = {"STARTED": "running", "STOPPED": "stopped", "CREATED": "stopped"}
             backend_status = moodle_data.get("status", "CREATED")
+            deadlines = lifecycle.compute_deadlines(moodle_data, data, policy)
 
             moodles.append(
                 MoodleContainerResponse(
@@ -100,6 +108,8 @@ def list_infrastructures() -> InfrastructureListResponse:
                     www_port=str(moodle_data.get("www_port", "")),
                     db_port=str(moodle_data.get("db_port", "")),
                     created_at=moodle_data.get("created_at", ""),
+                    auto_stop_at=_utc_iso(deadlines.auto_stop_at),
+                    auto_delete_at=_utc_iso(deadlines.auto_delete_at),
                 )
             )
 
