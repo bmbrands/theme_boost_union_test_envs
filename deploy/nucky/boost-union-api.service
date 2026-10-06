@@ -1,0 +1,19 @@
+[Unit]
+Description=Boost Union Test Environments FastAPI backend
+After=network.target docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/boost-union-envs/backend
+# Selects env.nucky.yml instead of config.yml's default (env.local.yml).
+Environment=BOOST_UNION_ENV=env.nucky.yml
+# Secrets (session secret, bootstrap admin); see boost-union-api.env.example.
+EnvironmentFile=/etc/boost-union-api.env
+ExecStart=/opt/boost-union-envs/venv/bin/uvicorn theme_boost_union_test_envs.ui.api.server:app --host 127.0.0.1 --port 8000
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

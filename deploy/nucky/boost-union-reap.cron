@@ -1,0 +1,6 @@
+# Lifecycle reaper: auto-stop / auto-cleanup of Moodle test instances and
+# deletion warning emails. Policy lives in example_pwd/settings.yaml (edit it
+# in the frontend: Admin settings). Installed to /etc/cron.d by deploy.sh.
+SHELL=/bin/bash
+BOOST_UNION_ENV=env.nucky.yml
+*/15 * * * * root cd /opt/boost-union-envs/backend && /opt/boost-union-envs/venv/bin/python scripts/reap_instances.py >> /var/log/boost-union-reap.log 2>&1

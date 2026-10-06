@@ -1,3 +1,4 @@
+import os
 import sys
 from enum import Enum
 from pathlib import Path
@@ -55,7 +56,11 @@ class CrossCuttingConcerns(containers.DeclarativeContainer):
         # only wiring chosen environment config as path here, because
         # pre-injection it's not possible to use 'config.environment' as
         # argument to read from another config file
-        environment_file=config.environment.as_(lambda p: Path(sys.path[0]) / p),
+        # BOOST_UNION_ENV overrides config.yml's `environment`, so a server can
+        # select its env.*.yml without a local modification to config.yml.
+        environment_file=config.environment.as_(
+            lambda p: Path(sys.path[0]) / (os.environ.get("BOOST_UNION_ENV") or p)
+        ),
         moodle_versions_to_php_versions=moodle_versions_to_php_versions,
         supported_plugins=supported_plugins,
     )
