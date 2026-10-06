@@ -1,0 +1,15 @@
+# MailHog: catches all email sent by the provisioner on the acceptance server
+# so notifications can be tested without delivering real mail.
+#
+#   SMTP:   127.0.0.1:1025 (host only; no auth, no TLS)
+#   Web UI: http://192.168.2.17:8025 (LAN only; not exposed through ngrok)
+#
+# Start/update: docker compose -f deploy/nucky/mailhog/docker-compose.yml up -d
+services:
+  mailhog:
+    image: mailhog/mailhog:v1.0.1
+    container_name: mailhog
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:1025:1025"
+      - "8025:8025"
