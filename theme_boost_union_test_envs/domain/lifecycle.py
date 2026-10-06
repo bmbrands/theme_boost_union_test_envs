@@ -118,10 +118,12 @@ def save_policy(policy: LifecyclePolicy) -> None:
 class Action:
     """A single lifecycle action the reaper should perform."""
 
-    kind: str  # "stop" | "destroy" | "teardown"
+    kind: str  # "stop" | "destroy" | "teardown" | "notify"
     infrastructure: str
     version: str | None = None
     reason: str = ""
+    # For "notify": the deletion time being warned about (naive UTC).
+    deadline: datetime | None = None
 
 
 def _parse_ts(value: Any) -> datetime | None:
@@ -187,6 +189,16 @@ class Deadlines:
     stop_reason: str = ""
     started: datetime | None = None
     auto_delete_at: datetime | None = None
+    stopped: datetime | None = None
+
+
+# Key on a moodle record holding the deletion deadline (ISO) that a warning
+# email was already sent for, so each stop cycle is warned about only once.
+WARNING_SENT_KEY = "deletion_warning_sent_for"
+
+
+def deadline_key(value: datetime) -> str:
+    return value.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def compute_deadlines(
@@ -232,6 +244,7 @@ def compute_deadlines(
         )
         if stopped is not None:
             retention = timedelta(days=max(0, policy.stopped_retention_days))
+            result.stopped = stopped
             result.auto_delete_at = stopped + retention
 
     return result
@@ -255,8 +268,13 @@ def plan_actions(
     testbed_info: dict[str, Any],
     policy: LifecyclePolicy,
     now: datetime | None = None,
+    warn_before: timedelta | None = None,
 ) -> list[Action]:
-    """Decide which instances to stop / destroy / teardown.
+    """Decide which instances to stop / destroy / teardown / warn about.
+
+    With ``warn_before`` set, a ``notify`` action is planned once per stop
+    cycle for an instance whose deletion is due within that window (and not
+    yet due), unless a warning for that same deadline was already sent.
 
     Pure: no I/O, no Docker. ``now`` defaults to the current UTC time (naive).
     Malformed infrastructure/moodle records are skipped individually so a single
@@ -297,11 +315,24 @@ def plan_actions(
                 actions.append(Action("stop", infra_name, version, reason))
 
             # --- auto-cleanup: stopped/idle past retention -----------------
-            if (
-                deadlines.auto_delete_at is not None
-                and now >= deadlines.auto_delete_at
-            ):
+            delete_at = deadlines.auto_delete_at
+            if delete_at is not None and now >= delete_at:
                 to_destroy.append(version)
+            elif (
+                delete_at is not None
+                and warn_before is not None
+                and now >= delete_at - warn_before
+                and moodle.get(WARNING_SENT_KEY) != deadline_key(delete_at)
+            ):
+                actions.append(
+                    Action(
+                        "notify",
+                        infra_name,
+                        version,
+                        f"deletion due {deadline_key(delete_at)}",
+                        deadline=delete_at,
+                    )
+                )
 
         # If every moodle in the infra is being cleaned up, tear the whole
         # infrastructure down in one go instead of per-moodle destroys.
@@ -343,6 +374,7 @@ class ReapSummary:
     stopped: int = 0
     destroyed: int = 0
     torn_down: int = 0
+    notified: int = 0
     failures: int = 0
     planned: list[Action] = field(default_factory=list)
 
@@ -353,14 +385,16 @@ def execute(
     *,
     dry_run: bool = False,
     on_pre_destroy: Callable[[Action], None] | None = None,
+    notifier: Callable[[Action], None] | None = None,
     logger: Callable[[str], None] | None = None,
 ) -> ReapSummary:
     """Apply lifecycle ``actions`` using ``core``.
 
     In ``dry_run`` mode no ``core`` method is called; actions are only reported.
-    ``on_pre_destroy`` is invoked before each destroy/teardown (the seam for
-    future pre-deletion notifications). Each action is isolated: a failure is
-    logged and counted, but does not abort the remaining actions.
+    ``on_pre_destroy`` is invoked before each destroy/teardown; ``notifier``
+    handles ``notify`` actions (deletion warning emails). Each action is
+    isolated: a failure is logged and counted, but does not abort the
+    remaining actions.
     """
     def _log(msg: str) -> None:
         if logger is not None:
@@ -374,9 +408,7 @@ def execute(
             if action.version
             else action.infrastructure
         )
-        verb = {"stop": "stop", "destroy": "destroy", "teardown": "teardown"}.get(
-            action.kind, action.kind
-        )
+        verb = {"notify": "send deletion warning for"}.get(action.kind, action.kind)
         prefix = "[dry-run] would " if dry_run else ""
         _log(f"{prefix}{verb} {target} ({action.reason})")
 
@@ -397,6 +429,11 @@ def execute(
                     on_pre_destroy(action)
                 core.teardown_infrastructure(action.infrastructure)
                 summary.torn_down += 1
+            elif action.kind == "notify":
+                if notifier is None:
+                    raise RuntimeError("no notifier configured")
+                notifier(action)
+                summary.notified += 1
         except Exception as exc:  # noqa: BLE001 - one bad action must not abort
             summary.failures += 1
             _log(f"FAILED: {verb} {target}: {exc}")

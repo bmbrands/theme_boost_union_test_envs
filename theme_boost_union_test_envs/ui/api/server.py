@@ -7,6 +7,7 @@ from theme_boost_union_test_envs.cross_cutting.user_store import user_store
 from .routes import (
     audit_router,
     auth_router,
+    email_router,
     infrastructures_router,
     lifecycle_router,
     logs_router,
@@ -54,6 +55,8 @@ def create_app() -> FastAPI:
     app.include_router(audit_router, dependencies=protected)
     app.include_router(settings_router, dependencies=protected)
     app.include_router(lifecycle_router, dependencies=protected)
+    # Email router carries its own Admin Settings guard on every route.
+    app.include_router(email_router)
     app.include_router(logs_router, dependencies=protected)
     # Users router carries its own admin guard on every route.
     app.include_router(users_router)

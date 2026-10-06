@@ -1,5 +1,6 @@
 from .audit import router as audit_router
 from .auth import router as auth_router
+from .email import router as email_router
 from .infrastructures import router as infrastructures_router
 from .lifecycle import router as lifecycle_router
 from .logs import router as logs_router

@@ -32,7 +32,7 @@ from datetime import datetime, timezone
 sys.path[0] = os.getcwd()
 
 from theme_boost_union_test_envs.app import Application  # noqa: E402
-from theme_boost_union_test_envs.domain import lifecycle  # noqa: E402
+from theme_boost_union_test_envs.domain import lifecycle, notifications  # noqa: E402
 
 
 def _log(message: str) -> None:
@@ -88,7 +88,28 @@ def main(argv: list[str] | None = None) -> int:
         _log("no infrastructure.yaml found - nothing to do")
         return 0
 
-    actions = lifecycle.plan_actions(dict(testbed_info), policy, now)
+    testbed_info = dict(testbed_info)
+
+    # Deletion warning emails (only when auto-cleanup + warnings are enabled
+    # and SMTP is configured).
+    email_settings = notifications.load_settings()
+    warn_before = (
+        notifications.warn_before(email_settings)
+        if policy.auto_cleanup_enabled
+        else None
+    )
+    notifier = None
+    if warn_before is not None:
+        notifier = notifications.make_deletion_notifier(
+            email_settings,
+            testbed_info,
+            policy.stopped_retention_days,
+            parser,
+            portal_url=notifications.default_portal_url(),
+            logger=_log,
+        )
+
+    actions = lifecycle.plan_actions(testbed_info, policy, now, warn_before)
     if not actions:
         _log("no instances match the lifecycle policy - nothing to do")
         return 0
@@ -97,13 +118,15 @@ def main(argv: list[str] | None = None) -> int:
         actions,
         core,
         dry_run=args.dry_run,
+        notifier=notifier,
         logger=_log,
     )
 
     _log(
         "done: "
         f"stopped={summary.stopped} destroyed={summary.destroyed} "
-        f"torn_down={summary.torn_down} failures={summary.failures} "
+        f"torn_down={summary.torn_down} notified={summary.notified} "
+        f"failures={summary.failures} "
         f"(planned {len(summary.planned)}{', dry-run' if args.dry_run else ''})"
     )
     return 1 if summary.failures else 0

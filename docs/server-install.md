@@ -410,6 +410,35 @@ instances that predate this feature fall back to the infrastructure's
 
 ---
 
+## 13b. Email notifications (deletion warnings)
+
+The reaper can email the owner of an environment before a stopped instance is
+deleted by auto-cleanup. Configure it in the frontend under
+**Admin Settings → Email**:
+
+- **SMTP server**: host, port, security (STARTTLS / SSL/TLS / none), optional
+  login, sender address and name. The password is write-only in the UI and is
+  stored in `settings.yaml` (file mode 600).
+- **Provisioner URL / time zone**: the link and the time zone used in emails
+  (default: the server's public URL and `Europe/Berlin`).
+- **Deletion warning**: on/off, how many hours before deletion to send it, and
+  the subject and message. Both are templates with placeholders such as
+  `{{ user_name }}`, `{{ environment }}`, `{{ moodle_version }}`,
+  `{{ deletion_date }}`, `{{ stopped_since }}`, `{{ portal_url }}` and
+  `{{ server_name }}`; the tab lists them all and shows a live preview.
+  Unknown placeholders are rejected when saving.
+- **Send test**: sends the warning, filled with sample data, to any address
+  using the values in the form (also before saving), and shows the SMTP error
+  if it fails.
+
+Each stop cycle is warned about once: the deadline that was warned about is
+stored on the instance in `infrastructure.yaml` (`deletion_warning_sent_for`).
+Starting and stopping the instance again produces a new deadline and a new
+warning. Warnings are only sent when auto-cleanup is enabled and SMTP is
+configured; instances without a known owner are skipped (logged).
+
+---
+
 ## 14. Where things live
 
 | Path | Purpose |
