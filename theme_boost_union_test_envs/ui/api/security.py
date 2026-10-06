@@ -142,3 +142,15 @@ def require_admin(user: dict[str, Any] = Depends(active_user)) -> dict[str, Any]
             detail="Administrator privileges required",
         )
     return user
+
+
+def require_settings_admin(
+    user: dict[str, Any] = Depends(active_user),
+) -> dict[str, Any]:
+    """An active user with the ``system:admin`` (Admin Settings) permission."""
+    if not role_has_permission(user.get("roles", []), "system", "admin"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Administrator privileges required",
+        )
+    return user

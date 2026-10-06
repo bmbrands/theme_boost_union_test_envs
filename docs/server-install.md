@@ -353,8 +353,10 @@ without manual teardown. It is a standalone script driven by system cron.
 ### Enable it (opt-in)
 
 Automation is **disabled by default** — nothing is stopped or destroyed until
-you configure a policy. Edit the working directory's `settings.yaml` and add a
-`lifecycle` block under `values` (all keys optional; defaults shown):
+you configure a policy. Administrators edit it in the frontend under
+**Admin Settings → Lifecycle** (stored via `PUT /api/lifecycle`). It ends up as
+the `lifecycle` block under `values` in the working directory's `settings.yaml`,
+which you can also edit by hand (all keys optional; defaults shown):
 
 ```yaml
 # example_pwd/settings.yaml

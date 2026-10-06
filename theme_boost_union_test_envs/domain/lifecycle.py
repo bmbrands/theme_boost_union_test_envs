@@ -95,19 +95,18 @@ def policy_from_values(values: dict[str, Any] | None) -> LifecyclePolicy:
 
 def load_policy() -> LifecyclePolicy:
     """Load the lifecycle policy from ``<working_dir>/settings.yaml``."""
-    import yaml
+    from ..cross_cutting import settings_store
 
-    from ..cross_cutting.configuration import config
+    return policy_from_values({"lifecycle": settings_store.get_section("lifecycle")})
 
-    path = config().working_dir / "settings.yaml"
-    values: dict[str, Any] = {}
-    if path.exists():
-        with open(path, "r") as f:
-            data = yaml.safe_load(f) or {}
-        raw = data.get("values", {})
-        if isinstance(raw, dict):
-            values = raw
-    return policy_from_values(values)
+
+def save_policy(policy: LifecyclePolicy) -> None:
+    """Persist ``policy`` as the ``lifecycle`` section of ``settings.yaml``."""
+    from dataclasses import asdict
+
+    from ..cross_cutting import settings_store
+
+    settings_store.set_section("lifecycle", asdict(policy))
 
 
 # ---------------------------------------------------------------------------

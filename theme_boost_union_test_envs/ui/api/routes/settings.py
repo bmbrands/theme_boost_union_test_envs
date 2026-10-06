@@ -1,25 +1,25 @@
 """Persist admin settings to ``<working_dir>/settings.yaml``.
 
-The frontend renders a hard-coded list of configuration items with default
-values. This endpoint stores only the overrides the user has changed so that
-the catalogue can be edited without redeploying the backend.
+Generic key/value overrides. Sections that have their own dedicated routes
+(``lifecycle``, ``email``) are preserved on write so this endpoint can never
+wipe them; edit those through ``/api/lifecycle`` and ``/api/email``.
 """
 
 from __future__ import annotations
 
-import threading
-from pathlib import Path
 from typing import Any
 
-import yaml
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from theme_boost_union_test_envs.cross_cutting import config
+from theme_boost_union_test_envs.cross_cutting import settings_store
+
+from ..security import require_settings_admin
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
-_write_lock = threading.Lock()
+# Sections owned by dedicated routes; never read or written here.
+_OWNED_SECTIONS = ("lifecycle", "email")
 
 
 class SettingsResponse(BaseModel):
@@ -30,36 +30,28 @@ class SettingsUpdate(BaseModel):
     values: dict[str, Any]
 
 
-def _settings_path() -> Path:
-    return config().working_dir / "settings.yaml"
-
-
-def _load() -> dict[str, Any]:
-    path = _settings_path()
-    if not path.exists():
-        return {}
-    with open(path, "r") as f:
-        data = yaml.safe_load(f) or {}
-    return dict(data.get("values", {}))
-
-
-def _save(values: dict[str, Any]) -> None:
-    path = _settings_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "w") as f:
-        yaml.safe_dump({"values": values}, f, sort_keys=False)
+def _public(values: dict[str, Any]) -> dict[str, Any]:
+    return {k: v for k, v in values.items() if k not in _OWNED_SECTIONS}
 
 
 @router.get("", response_model=SettingsResponse)
 def get_settings() -> SettingsResponse:
-    return SettingsResponse(values=_load())
+    return SettingsResponse(values=_public(settings_store.load_values()))
 
 
 @router.put("", response_model=SettingsResponse)
-def put_settings(payload: SettingsUpdate) -> SettingsResponse:
-    with _write_lock:
+def put_settings(
+    payload: SettingsUpdate,
+    _: dict[str, Any] = Depends(require_settings_admin),
+) -> SettingsResponse:
+    with settings_store._lock:
+        current = settings_store.load_values()
+        values = _public(payload.values)
+        for key in _OWNED_SECTIONS:
+            if key in current:
+                values[key] = current[key]
         try:
-            _save(payload.values)
+            settings_store.save_values(values)
         except Exception as e:  # noqa: BLE001
             raise HTTPException(status_code=500, detail=str(e)) from e
-    return SettingsResponse(values=payload.values)
+    return SettingsResponse(values=_public(values))
