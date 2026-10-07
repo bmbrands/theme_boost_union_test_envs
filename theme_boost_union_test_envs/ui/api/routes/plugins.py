@@ -22,10 +22,12 @@ from urllib.parse import urlparse
 
 import httpx
 import yaml
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from theme_boost_union_test_envs.cross_cutting import config
+
+from ..security import require_settings_admin
 
 router = APIRouter(prefix="/api/plugins", tags=["plugins"])
 
@@ -337,7 +339,7 @@ def list_plugins() -> PluginListResponse:
     return PluginListResponse(plugins=[Plugin(**p) for p in _load_plugins_raw()])
 
 
-@router.post("", response_model=Plugin, status_code=201)
+@router.post("", response_model=Plugin, status_code=201, dependencies=[Depends(require_settings_admin)])
 def create_plugin(payload: PluginCreate) -> Plugin:
     plugins = _load_plugins_raw()
     if any(p.get("name") == payload.name for p in plugins):
@@ -356,7 +358,7 @@ def create_plugin(payload: PluginCreate) -> Plugin:
     return new_plugin
 
 
-@router.patch("/{plugin_id}", response_model=Plugin)
+@router.patch("/{plugin_id}", response_model=Plugin, dependencies=[Depends(require_settings_admin)])
 def update_plugin(plugin_id: str, payload: PluginUpdate) -> Plugin:
     plugins = _load_plugins_raw()
     for i, p in enumerate(plugins):
@@ -369,7 +371,7 @@ def update_plugin(plugin_id: str, payload: PluginUpdate) -> Plugin:
     raise HTTPException(status_code=404, detail=f"Plugin {plugin_id!r} not found")
 
 
-@router.delete("/{plugin_id}")
+@router.delete("/{plugin_id}", dependencies=[Depends(require_settings_admin)])
 def delete_plugin(plugin_id: str) -> dict:
     plugins = _load_plugins_raw()
     new_plugins = [p for p in plugins if p.get("id") != plugin_id]

@@ -15,10 +15,12 @@ from pathlib import Path
 from typing import Any, Literal
 
 import yaml
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from theme_boost_union_test_envs.cross_cutting import config
+
+from ..security import active_user, require_permission, require_settings_admin
 
 router = APIRouter(prefix="/api/audit", tags=["audit"])
 
@@ -46,9 +48,12 @@ class AuditEntry(BaseModel):
 
 
 class CreateAuditEntry(BaseModel):
-    user_id: str
-    user_name: str
-    user_email: str
+    # Accepted for backwards compatibility but ignored: the acting user, IP and
+    # user agent are always taken from the session/request, so entries cannot
+    # be attributed to someone else.
+    user_id: str | None = None
+    user_name: str | None = None
+    user_email: str | None = None
     action: str
     resource: str
     resource_id: str | None = None
@@ -85,7 +90,11 @@ def _save(entries: list[dict]) -> None:
         yaml.safe_dump({"entries": trimmed}, f, sort_keys=False)
 
 
-@router.get("", response_model=AuditListResponse)
+@router.get(
+    "",
+    response_model=AuditListResponse,
+    dependencies=[Depends(require_permission("audit", "read"))],
+)
 def list_entries(
     limit: int = Query(500, ge=1, le=MAX_ENTRIES),
 ) -> AuditListResponse:
@@ -99,11 +108,24 @@ def list_entries(
 
 
 @router.post("", response_model=AuditEntry, status_code=201)
-def create_entry(payload: CreateAuditEntry) -> AuditEntry:
+def create_entry(
+    payload: CreateAuditEntry,
+    request: Request,
+    user: dict[str, Any] = Depends(active_user),
+) -> AuditEntry:
+    data = payload.model_dump(
+        exclude={"user_id", "user_name", "user_email", "ip_address", "user_agent"}
+    )
+    name = f"{user.get('first_name', '')} {user.get('last_name', '')}".strip()
     entry = AuditEntry(
         id=f"audit-{uuid.uuid4().hex[:12]}",
         timestamp=datetime.now(timezone.utc).isoformat(),
-        **payload.model_dump(),
+        user_id=str(user.get("id", "")),
+        user_name=name or str(user.get("email", "")),
+        user_email=str(user.get("email", "")),
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+        **data,
     )
     with _write_lock:
         entries = _load()
@@ -112,7 +134,7 @@ def create_entry(payload: CreateAuditEntry) -> AuditEntry:
     return entry
 
 
-@router.delete("", status_code=204)
+@router.delete("", status_code=204, dependencies=[Depends(require_settings_admin)])
 def clear_entries() -> None:
     """Wipe the audit log. Use with care."""
     with _write_lock:

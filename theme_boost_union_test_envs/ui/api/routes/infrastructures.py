@@ -8,6 +8,13 @@ from pydantic import BaseModel, Field
 from theme_boost_union_test_envs.cross_cutting import yaml_parser
 from theme_boost_union_test_envs.cross_cutting.logger import log
 from theme_boost_union_test_envs.domain import lifecycle
+from theme_boost_union_test_envs.domain.validation import (
+    InvalidInputError,
+    validate_git_ref,
+    validate_infrastructure_name,
+    validate_moodle_version,
+)
+from theme_boost_union_test_envs.exceptions import InfrastructureDoesNotExistYetError
 from ..models import (
     InfrastructureListResponse,
     InfrastructureOwner,
@@ -74,6 +81,27 @@ class CreateInfrastructureResponse(BaseModel):
     status: str
     message: str
     name: str
+
+
+def _validate_new(name: str | None, versions: list[str]) -> None:
+    """Reject unsafe names/versions with a 400 before anything is scheduled."""
+    try:
+        if name is not None:
+            validate_infrastructure_name(name)
+        for version in versions:
+            validate_moodle_version(version)
+    except InvalidInputError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+def _core_action(action: Any, *args: str) -> None:
+    """Run a core action, mapping unknown targets to 404 and bad input to 400."""
+    try:
+        action(*args)
+    except InfrastructureDoesNotExistYetError as e:
+        raise HTTPException(status_code=404, detail=str(e) or "Not found") from e
+    except InvalidInputError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 def _utc_iso(value: datetime | None) -> str | None:
@@ -241,6 +269,8 @@ def create_infrastructure(
         boost-union-envs setup <name> <git_ref_type> <git_ref>
         boost-union-envs build <name> <moodle_version> [<moodle_version> ...]
     """
+    _validate_new(payload.name, list(payload.moodle_versions))
+
     # Reject duplicate names up-front (both in-flight and already-persisted).
     existing = yaml_parser().load_testbed_info()
     with _provisioning_lock:
@@ -269,10 +299,11 @@ def create_infrastructure(
     # before coercing to int.
     ref: str | int = payload.git_ref
     if payload.git_ref_type == "pr":
-        try:
-            ref = int(payload.git_ref.removeprefix("PR#"))
-        except ValueError as e:
-            raise HTTPException(status_code=400, detail="PR reference must be numeric") from e
+        ref = payload.git_ref.removeprefix("PR#")
+    try:
+        ref = validate_git_ref(payload.git_ref_type, ref)
+    except InvalidInputError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
     owner = _owner_dict(current)
     with _provisioning_lock:
@@ -345,6 +376,7 @@ def add_containers(
     existing = yaml_parser().load_testbed_info()
     if name not in existing:
         raise HTTPException(status_code=404, detail=f"Infrastructure '{name}' not found")
+    _validate_new(None, list(payload.moodle_versions))
 
     # Reject versions that already exist for this infra.
     existing_versions = set(existing[name].get("moodles", {}).keys())
@@ -384,8 +416,10 @@ def start_container(name: str, version: str) -> dict:
     """Start a Moodle container for the given infrastructure and version."""
     try:
         core = _get_core()
-        core.start_environment(name, version)
+        _core_action(core.start_environment, name, version)
         return {"status": "ok", "message": f"Container {name}/{version} started"}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -395,8 +429,10 @@ def stop_container(name: str, version: str) -> dict:
     """Stop a Moodle container for the given infrastructure and version."""
     try:
         core = _get_core()
-        core.stop_environment(name, version)
+        _core_action(core.stop_environment, name, version)
         return {"status": "ok", "message": f"Container {name}/{version} stopped"}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -411,8 +447,10 @@ def destroy_container(name: str, version: str) -> dict:
     """
     try:
         core = _get_core()
-        core.destroy_environment(name, version)
+        _core_action(core.destroy_environment, name, version)
         return {"status": "ok", "message": f"Container {name}/{version} destroyed"}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -427,7 +465,9 @@ def teardown_infrastructure(name: str) -> dict:
     """
     try:
         core = _get_core()
-        core.teardown_infrastructure(name)
+        _core_action(core.teardown_infrastructure, name)
         return {"status": "ok", "message": f"Infrastructure {name} torn down"}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

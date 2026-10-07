@@ -106,10 +106,11 @@ class TemplateEngine:
             infrastructure_name, moodle_version
         )
         web_host = self._create_web_url(infrastructure_name, moodle_version)
-        # Bind the published webserver port on all interfaces so the container is
-        # reachable from the LAN (and not only from the docker host's loopback).
-        # moodle-docker-compose otherwise prepends "127.0.0.1:" automatically.
-        web_port_with_bind_ip = f"0.0.0.0:{self._find_free_port()}"
+        # Publish the webserver port on loopback only. Behind the proxy, nginx on
+        # the same host is the only client; binding on 0.0.0.0 would expose every
+        # Moodle over plain HTTP on the server's public address (Docker bypasses
+        # the host firewall). Locally the URL is http://localhost:<port> anyway.
+        web_port_with_bind_ip = f"127.0.0.1:{self._find_free_port()}"
         substitutes = {
             "REPLACE_COMPOSE_NAME": compose_safe_name,
             "REPLACE_MOODLE_SOURCE_PATH": f"{template_path / 'moodle'}",

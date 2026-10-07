@@ -6,7 +6,7 @@ running uvicorn (application logs plus uvicorn's own logging).
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 
 from theme_boost_union_test_envs.cross_cutting.log_buffer import (
@@ -14,7 +14,15 @@ from theme_boost_union_test_envs.cross_cutting.log_buffer import (
     get_logs,
 )
 
-router = APIRouter(prefix="/api/logs", tags=["logs"])
+from ..security import require_permission, require_settings_admin
+
+# Server logs can contain operational details; they are shown in the audit
+# log dialog, so reading requires the audit permission.
+router = APIRouter(
+    prefix="/api/logs",
+    tags=["logs"],
+    dependencies=[Depends(require_permission("audit", "read"))],
+)
 
 
 class LogLine(BaseModel):
@@ -43,7 +51,7 @@ def list_logs(
     )
 
 
-@router.delete("", status_code=204)
+@router.delete("", status_code=204, dependencies=[Depends(require_settings_admin)])
 def clear() -> None:
     """Wipe the in-memory log buffer."""
     clear_logs()

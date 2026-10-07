@@ -1,4 +1,5 @@
 import shutil
+import shlex
 import subprocess
 from functools import wraps
 from pathlib import Path
@@ -145,7 +146,9 @@ class TestContainer:
         # create the correct tables on the database server
         self._run_local_php_script(
             "admin/cli/install_database.php",
-            f'--agree-license --fullname="{full_name}" --shortname="{short_name}" --summary="{summary}" --adminpass=$MOODLE_ADMIN_PASSWORD --adminemail="{admin_email}"',
+            f"--agree-license --fullname={shlex.quote(full_name)} "
+            f"--shortname={shlex.quote(short_name)} --summary={shlex.quote(summary)} "
+            f"--adminpass=$MOODLE_ADMIN_PASSWORD --adminemail={shlex.quote(admin_email)}",
         )
         # allow plugins to hook up last needed operations
         self._run_postcondition_scripts_for_specific_plugins()

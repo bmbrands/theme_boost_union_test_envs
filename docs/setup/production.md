@@ -93,7 +93,18 @@ Work packages 3 and 5 run on nucky. To enable them on Plesk:
 4. In the UI: **Admin Settings → Email** with the SMTP server provided by the
    association, send a test; then **Lifecycle** with production values
    (automation stays off until you enable it).
-5. Consider adding `deploy/plesk/` (unit, cron, deploy script, nginx
+5. Re-bind existing Moodle instances to loopback. Instances built before
+   October 2026 publish their web port on `0.0.0.0` and are reachable over
+   plain HTTP on the server's public address, bypassing nginx and TLS. New
+   builds use `127.0.0.1`. For existing ones:
+   ```bash
+   cd /opt/boost-union-envs/backend/example_pwd
+   grep -l 'MOODLE_DOCKER_WEB_PORT=0.0.0.0:' */moodles/*/.env
+   sed -i 's/MOODLE_DOCKER_WEB_PORT=0.0.0.0:/MOODLE_DOCKER_WEB_PORT=127.0.0.1:/' */moodles/*/.env
+   ```
+   then stop and start each running instance (UI) so Docker re-publishes the
+   port. Check with `ss -ltnp | grep docker-proxy`: no Moodle port on `0.0.0.0`.
+6. Consider adding `deploy/plesk/` (unit, cron, deploy script, nginx
    directives) like `deploy/nucky/`, so the server can be rebuilt from git.
 
 ## Troubleshooting from the original installation

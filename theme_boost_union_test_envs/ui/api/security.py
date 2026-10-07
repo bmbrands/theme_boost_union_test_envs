@@ -154,3 +154,17 @@ def require_settings_admin(
             detail="Administrator privileges required",
         )
     return user
+
+
+def require_permission(resource: str, action: str) -> Any:
+    """Dependency factory: an active user holding ``resource:action``."""
+
+    def dependency(user: dict[str, Any] = Depends(active_user)) -> dict[str, Any]:
+        if not role_has_permission(user.get("roles", []), resource, action):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Insufficient permissions",
+            )
+        return user
+
+    return dependency

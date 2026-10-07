@@ -14,6 +14,11 @@ from .cross_cutting import (
     yaml_parser,
 )
 from .domain import Testbed, TestContainer, TestInfrastructure
+from .domain.validation import (
+    validate_git_ref,
+    validate_infrastructure_name,
+    validate_moodle_version,
+)
 from .entities import GitReference, MoodlePlugin
 from .exceptions import (
     InfrastructureDoesNotExistYetError,
@@ -101,6 +106,8 @@ class BoostUnionTestEnvCore:
         git_ref: GitReference,
         created_by: dict[str, str] | None = None,
     ) -> None:
+        validate_infrastructure_name(infrastructure_name)
+        validate_git_ref(git_ref.type, git_ref.ref)
         path = config().working_dir / infrastructure_name
         if path.exists():
             raise NameAlreadyTakenError("Infrastructure exists already")
@@ -115,6 +122,9 @@ class BoostUnionTestEnvCore:
     @recreate_overview_html
     @check_testbed_existence
     def build_infrastructure(self, infrastructure_name: str, *versions: str) -> None:
+        validate_infrastructure_name(infrastructure_name)
+        for version in versions:
+            validate_moodle_version(version)
         path = config().working_dir / infrastructure_name
         if not path.exists():
             raise InfrastructureDoesNotExistYetError()
@@ -141,6 +151,7 @@ class BoostUnionTestEnvCore:
     @recreate_overview_html
     @check_testbed_existence
     def teardown_infrastructure(self, infrastructure_name: str) -> None:
+        self._require_known(infrastructure_name)
         path = config().working_dir / infrastructure_name
         if not path.exists():
             raise InfrastructureDoesNotExistYetError()
@@ -193,6 +204,27 @@ class BoostUnionTestEnvCore:
         for ver in versions:
             self.yaml_parser.remove_moodle(infrastructure_name, ver)
 
+    def _require_known(self, infrastructure_name: str, *versions: str) -> None:
+        """Only act on environments and versions recorded in infrastructure.yaml.
+
+        Names are used to build paths and command lines; requiring an exact
+        match with a recorded key keeps arbitrary input (e.g. ``..``) out of
+        both, while still accepting names created before validation existed.
+        """
+        testbed = self.yaml_parser.load_testbed_info()
+        infra = testbed.get(infrastructure_name) if isinstance(infrastructure_name, str) else None
+        if not isinstance(infra, dict):
+            raise InfrastructureDoesNotExistYetError(
+                f"Unknown environment {infrastructure_name!r}"
+            )
+        moodles = infra.get("moodles") or {}
+        known = {str(v) for v in moodles}
+        unknown = [v for v in versions if str(v) not in known]
+        if unknown:
+            raise InfrastructureDoesNotExistYetError(
+                f"Unknown Moodle version(s) for {infrastructure_name!r}: {', '.join(map(str, unknown))}"
+            )
+
     @check_testbed_existence
     def _container_call_helper(
         self,
@@ -210,6 +242,7 @@ class BoostUnionTestEnvCore:
         Raises:
             InfrastructureDoesNotExistYetError: raised if the passed infrastructure doesn't exist, therefore no containers can exist
         """
+        self._require_known(infrastructure_name, *versions)
         infrastructure_path = config().working_dir / infrastructure_name
         if not infrastructure_path.exists():
             raise InfrastructureDoesNotExistYetError()

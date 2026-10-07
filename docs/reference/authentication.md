@@ -139,11 +139,29 @@ API would deny.
 | `PATCH` | `/{user_id}` | Update profile, roles, active status, or reset password. |
 | `DELETE` | `/{user_id}` | Delete a user (last-admin / self-delete protected). |
 
-All other application routers (infrastructures, plugins, moodle, audit,
-settings, lifecycle, logs) require a valid, fully-activated session. Changing
-settings (`PUT /api/settings`, `PUT /api/lifecycle`) and everything under
-`/api/email` additionally require the Admin Settings permission
-(`system:admin`).
+All other application routers require a valid, fully-activated session.
+Some endpoints additionally require a permission:
+
+| Endpoint | Permission |
+| --- | --- |
+| `GET /api/audit`, `GET /api/logs` | `audit:read` |
+| `DELETE /api/audit`, `DELETE /api/logs` | `system:admin` |
+| `POST/PATCH/DELETE /api/plugins` (plugin catalog) | `system:admin` |
+| `PUT /api/settings`, `PUT /api/lifecycle`, everything under `/api/email` | `system:admin` |
+
+`POST /api/audit` is open to every user, but the server records the acting
+user, IP address and user agent from the session and request; values sent by
+the client are ignored.
+
+### Input validation
+
+Environment names, Moodle versions and git references are validated by the
+API and again in the core (`domain/validation.py`) before they are used in
+paths, `.env` files or command lines: names are 1–63 letters, digits, `.`,
+`_` or `-` (starting with a letter or digit, never `..`), versions look like
+`5.0.2`, branch/tag names cannot start with `-` or contain whitespace or shell
+characters, commits are hex SHAs and PRs are numbers. Actions on existing
+environments only accept names recorded in `infrastructure.yaml`.
 
 ## How the frontend ties in
 
