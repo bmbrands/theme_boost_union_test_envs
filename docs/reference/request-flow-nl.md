@@ -31,10 +31,10 @@ De vhost die nginx laadt is een symlink:
 
 Die `192.168.2.17.conf` is **niet handgeschreven** — hij is gegenereerd
 door de Python backend uit het template
-[`nucky_production_nginx.conf`](../theme_boost_union_test_envs/cross_cutting/templates/nucky_production_nginx.conf)
-(geselecteerd via `nginx.template:` in [env.nucky.yml](../env.nucky.yml)).
+[`nucky_production_nginx.conf`](https://github.com/bmbrands/theme_boost_union_test_envs/blob/production/theme_boost_union_test_envs/cross_cutting/templates/nucky_production_nginx.conf)
+(geselecteerd via `nginx.template:` in [env.nucky.yml](https://github.com/bmbrands/theme_boost_union_test_envs/blob/production/env.nucky.yml)).
 De rendering gebeurt door
-[`TemplateEngine.overview_nginx_config()`](../theme_boost_union_test_envs/cross_cutting/template_engine.py).
+[`TemplateEngine.overview_nginx_config()`](https://github.com/bmbrands/theme_boost_union_test_envs/blob/production/theme_boost_union_test_envs/cross_cutting/template_engine.py).
 
 In die outer-vhost staat onderaan een `include`-regel:
 
@@ -64,7 +64,7 @@ Voor onze URL zijn er drie kandidaten in volgorde van specificiteit:
 
 Onze URL begint met `/mont-test/5.1.4`, dus de **tweede** location wint.
 Die location ziet er — gerenderd uit
-[`templates/moodle_nginx.conf`](../theme_boost_union_test_envs/cross_cutting/templates/moodle_nginx.conf)
+[`templates/moodle_nginx.conf`](https://github.com/bmbrands/theme_boost_union_test_envs/blob/production/theme_boost_union_test_envs/cross_cutting/templates/moodle_nginx.conf)
 — zo uit:
 
 ```nginx
@@ -96,7 +96,7 @@ van die Moodle-omgeving zet.
 Die poort is gepubliceerd door `docker compose` van de per-env stack. De
 compose-stack zelf is gestart met `bin/moodle-docker-compose` (een wrapper
 die in elke env-directory wordt gegenereerd) en gebruikt het master-template
-[`templates/local.yml`](../theme_boost_union_test_envs/cross_cutting/templates/local.yml).
+[`templates/local.yml`](https://github.com/bmbrands/theme_boost_union_test_envs/blob/production/theme_boost_union_test_envs/cross_cutting/templates/local.yml).
 
 In de `.env` van die env staat:
 
@@ -119,9 +119,9 @@ geven.
 ### De fix: een `Alias` per env
 
 Bij het aanmaken van de env schrijft
-[`TemplateEngine.docker_customisation()`](../theme_boost_union_test_envs/cross_cutting/template_engine.py)
+[`TemplateEngine.docker_customisation()`](https://github.com/bmbrands/theme_boost_union_test_envs/blob/production/theme_boost_union_test_envs/cross_cutting/template_engine.py)
 een klein snippet uit
-[`templates/apache-prefix.conf`](../theme_boost_union_test_envs/cross_cutting/templates/apache-prefix.conf):
+[`templates/apache-prefix.conf`](https://github.com/bmbrands/theme_boost_union_test_envs/blob/production/theme_boost_union_test_envs/cross_cutting/templates/apache-prefix.conf):
 
 ```apache
 Alias /mont-test/5.1.4 /var/www/html/public
@@ -233,8 +233,9 @@ onze URL met `/mont-test/...` begint.
 
 ## Zie ook
 
-- [serverlog.md](serverlog.md) — volledige deployment-log van nucky, inclusief
-  sectie 10 met de path-based reverse-proxy details (`proxy_pass` zonder
-  trailing slash, `MOODLE_DOCKER_WEB_PORT=""` override, etc.).
-- [installation.md](installation.md) — installatie-instructies voor lokaal en
-  productie.
+- [Setup: nucky](../setup/acceptance.md) — hoe nucky is ingericht.
+- [nucky deploy log](../archive/nucky-deploy-log.md) — de oorspronkelijke
+  deployment-log, inclusief sectie 10 met de path-based reverse-proxy details
+  (`proxy_pass` zonder trailing slash, `MOODLE_DOCKER_WEB_PORT=""` override, etc.).
+- [Configuration files](../configuration/config-files.md) — `proxied`, `base_url`
+  en de andere sleutels in `env.*.yml`.

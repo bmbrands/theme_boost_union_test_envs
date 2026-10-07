@@ -1,5 +1,10 @@
 # Session Log — boost-union-envs
 
+!!! note "Archive"
+    Historical document, kept for background. It describes the situation at
+    the time it was written and may be outdated; the current documentation is
+    under *Working with*, *Setup* and *Configuration*.
+
 ## Environment setup
 
 ```bash

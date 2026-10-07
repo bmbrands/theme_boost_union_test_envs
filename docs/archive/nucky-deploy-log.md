@@ -1,5 +1,10 @@
 # Server Deployment Log — nucky (192.168.2.17)
 
+!!! note "Archive"
+    Historical document, kept for background. It describes the situation at
+    the time it was written and may be outdated; the current documentation is
+    under *Working with*, *Setup* and *Configuration*.
+
 Target: Debian 13 (`nucky`), accessed as `root@192.168.2.17` over SSH (key-based,
 no password).
 Goal: Run the Python FastAPI backend (branch `feature/fastapi`) and serve the
@@ -204,9 +209,9 @@ that ngrok can be pointed at. Three things are reverse-proxied through it:
 | `/<infra>/<ver>/` | per-Moodle docker container | rendered into `example_pwd/.nginx/testenvs/<infra>-<ver>.conf` by `TemplateEngine.moodle_nginx_config` |
 
 The outer vhost is rendered from
-[`theme_boost_union_test_envs/cross_cutting/templates/nucky_production_nginx.conf`](../theme_boost_union_test_envs/cross_cutting/templates/nucky_production_nginx.conf)
+[`theme_boost_union_test_envs/cross_cutting/templates/nucky_production_nginx.conf`](https://github.com/bmbrands/theme_boost_union_test_envs/blob/production/theme_boost_union_test_envs/cross_cutting/templates/nucky_production_nginx.conf)
 by `TemplateEngine.overview_nginx_config()`. The template is selected via
-`nginx.template: "nucky_production_nginx.conf"` in [env.nucky.yml](../env.nucky.yml).
+`nginx.template: "nucky_production_nginx.conf"` in [env.nucky.yml](https://github.com/bmbrands/theme_boost_union_test_envs/blob/production/env.nucky.yml).
 
 ```bash
 ssh root@192.168.2.17 'apt-get install -y -qq nginx'
@@ -383,7 +388,7 @@ will fall through to the SPA.
 
 ### 10.1 nginx — forward the prefix unchanged
 
-[`templates/moodle_nginx.conf`](../theme_boost_union_test_envs/cross_cutting/templates/moodle_nginx.conf):
+[`templates/moodle_nginx.conf`](https://github.com/bmbrands/theme_boost_union_test_envs/blob/production/theme_boost_union_test_envs/cross_cutting/templates/moodle_nginx.conf):
 
 ```nginx
 location /<infra>/<version> {
@@ -404,7 +409,7 @@ bare host, which then matches the SPA fallback.
 The Moodle container's Apache `DocumentRoot` is the bare `/var/www/html` (or
 `/var/www/html/public` for Moodle 5.1+). Without help, `/foo/5.1.4/...` 404s.
 A small Alias snippet is rendered per-env from
-[`templates/apache-prefix.conf`](../theme_boost_union_test_envs/cross_cutting/templates/apache-prefix.conf)
+[`templates/apache-prefix.conf`](https://github.com/bmbrands/theme_boost_union_test_envs/blob/production/theme_boost_union_test_envs/cross_cutting/templates/apache-prefix.conf)
 and bind-mounted into the container as
 `/etc/apache2/conf-enabled/moodle-prefix.conf`:
 
@@ -437,12 +442,12 @@ takes effect.
 ### 10.4 Code wiring
 
 All three pieces are emitted by
-[`TemplateEngine.docker_customisation`](../theme_boost_union_test_envs/cross_cutting/template_engine.py)
+[`TemplateEngine.docker_customisation`](https://github.com/bmbrands/theme_boost_union_test_envs/blob/production/theme_boost_union_test_envs/cross_cutting/template_engine.py)
 when `config().is_proxied` is true:
 
 - writes `apache-prefix.conf` into the per-env directory,
 - expands `$REPLACE_PROXY_OVERRIDES` in
-  [`templates/local.yml`](../theme_boost_union_test_envs/cross_cutting/templates/local.yml)
+  [`templates/local.yml`](https://github.com/bmbrands/theme_boost_union_test_envs/blob/production/theme_boost_union_test_envs/cross_cutting/templates/local.yml)
   with the bind-mount + `MOODLE_DOCKER_WEB_PORT: ""` override.
 
 `Template.safe_substitute` is used (not `substitute`) so any stray
@@ -462,17 +467,17 @@ never see `0.0.0.0:`.
 
 ### 10.6 New config keys (env.nucky.yml)
 
-Added in [`configuration.py`](../theme_boost_union_test_envs/cross_cutting/configuration.py):
+Added in [`configuration.py`](https://github.com/bmbrands/theme_boost_union_test_envs/blob/production/theme_boost_union_test_envs/cross_cutting/configuration.py):
 
 | Key | Default | Notes |
 |:----|:--------|:------|
-| `nginx.template`         | `plesk_production_nginx.conf` | Selects the outer-vhost template. `nucky` uses [`nucky_production_nginx.conf`](../theme_boost_union_test_envs/cross_cutting/templates/nucky_production_nginx.conf). |
+| `nginx.template`         | `plesk_production_nginx.conf` | Selects the outer-vhost template. `nucky` uses [`nucky_production_nginx.conf`](https://github.com/bmbrands/theme_boost_union_test_envs/blob/production/theme_boost_union_test_envs/cross_cutting/templates/nucky_production_nginx.conf). |
 | `nginx.scheme`           | `https`                       | Stored in Moodle URLs. Set to `http` for nucky (no TLS in nginx). |
 | `cert_chain_path` / `cert_key_path` | (still required by parser, may be empty) | Validation relaxed: only `overview_page_path` is required when proxied. |
 
-The active config on the server is [`env.nucky.yml`](../env.nucky.yml)
+The active config on the server is [`env.nucky.yml`](https://github.com/bmbrands/theme_boost_union_test_envs/blob/production/env.nucky.yml)
 (selected via `environment: env.nucky.yml` in
-[`config.yml`](../config.yml)).
+[`config.yml`](https://github.com/bmbrands/theme_boost_union_test_envs/blob/production/config.yml)).
 
 ### 10.7 Smoke test for a fresh env
 

@@ -26,10 +26,10 @@ Everything is stored in the configured **working directory**
 | --- | --- | --- |
 | `users.yaml` | The user directory (bcrypt password hashes, roles, status). | Atomic writes; treat as a secret. |
 | `.session_secret` | Random key used to sign session cookies. | Auto-generated, `chmod 600`. Delete to invalidate all sessions. |
-| `infra_owners.yaml` | Maps each environment to the user who created it. | Drives the "Owner" column in the UI. |
+| `infrastructure.yaml` | Each environment's `created_by` (id, name, email). | Drives the "Creator" column in the UI and the recipient of deletion warnings. |
 
-> These files should **not** be committed to source control. Add them to
-> `.gitignore` if your working directory lives inside the repo.
+> These files must **not** be committed; the whole working directory is in
+> `.gitignore`. See [Working directory](../configuration/working-directory.md).
 
 ## First run / bootstrapping
 
@@ -110,7 +110,7 @@ frontend `types/user.ts`):
 | Role | Permissions |
 | --- | --- |
 | **Tester** | View / create / delete environments. |
-| **Administrator** | Everything a tester can do, plus host metrics, admin settings, user management, and audit log access. |
+| **Administrator** | Everything a tester can do, plus host metrics, admin settings (plugin catalog, lifecycle policy, email), user management, and audit log access. |
 
 Permission checks are resource/action pairs (e.g. `environments:write`,
 `users:admin`, `system:admin`). The frontend derives its capability flags
@@ -140,7 +140,10 @@ API would deny.
 | `DELETE` | `/{user_id}` | Delete a user (last-admin / self-delete protected). |
 
 All other application routers (infrastructures, plugins, moodle, audit,
-settings, logs) require a valid, fully-activated session.
+settings, lifecycle, logs) require a valid, fully-activated session. Changing
+settings (`PUT /api/settings`, `PUT /api/lifecycle`) and everything under
+`/api/email` additionally require the Admin Settings permission
+(`system:admin`).
 
 ## How the frontend ties in
 

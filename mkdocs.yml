@@ -1,19 +1,42 @@
-site_name: theme_boost_union_test_envs
-# site_url: example.com
-repo_url: https://github.com/eloquenza/theme_boost_union_test_envs
-repo_name: theme_boost_union_test_envs
+site_name: Moodle Provisioner
+site_description: Moodle test environments for plugins of Moodle an Hochschulen e.V.
+repo_url: https://github.com/bmbrands/theme_boost_union_test_envs
+repo_name: bmbrands/theme_boost_union_test_envs
+edit_uri: edit/production/docs/
+# Private notes next to the docs (server histories, quotations) are never published.
+exclude_docs: |
+  archive/private/
 nav:
-  - home: index.md
-  - installation: installation.md
-  - usage: usage.md
-  - authentication: authentication.md
-  - testing: testing.md
-  - debugging: debugging.md
-  - Moodle 5.x: moodle5.md
-  - modules: api.md
-  - contributing: contributing.md
-  - authors: authors.md
-  - history: history.md
+  - Home: index.md
+  - Working with:
+      - Local (dev): working/dev.md
+      - nucky (acceptance): working/acceptance.md
+      - Plesk (production): working/production.md
+  - Setup:
+      - Local (dev): setup/dev.md
+      - nucky (acceptance): setup/acceptance.md
+      - Plesk (production): setup/production.md
+  - Configuration:
+      - Configuration files: configuration/config-files.md
+      - Working directory (example_pwd): configuration/working-directory.md
+  - Reference:
+      - Architecture: reference/architecture.md
+      - CLI: reference/cli.md
+      - Lifecycle & email: reference/lifecycle-and-email.md
+      - Authentication & users: reference/authentication.md
+      - Running Moodle tests: reference/moodle-tests.md
+      - Debugging: reference/debugging.md
+      - Request flow (NL): reference/request-flow-nl.md
+      - Moodle 5.x changes: reference/moodle5.md
+      - Python modules: reference/api.md
+  - Archive:
+      - nucky deploy log: archive/nucky-deploy-log.md
+      - Fullstack analysis: archive/fullstack-analysis.md
+      - Session log: archive/session-log.md
+  - Project:
+      - Contributing: project/contributing.md
+      - Authors: project/authors.md
+      - History: project/history.md
 theme:
   name: material
   language: en
@@ -68,7 +91,7 @@ extra:
     provider: mike
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/eloquenza/theme_boost_union_test_envs
+      link: https://github.com/bmbrands/theme_boost_union_test_envs
       name: Github
     - icon: material/email
       link: "mailto:dennis.grabowski@hs-hannover.de"

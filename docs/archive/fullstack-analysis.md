@@ -1,5 +1,10 @@
 # Fullstack Analysis: Connecting the React Frontend to the Python Backend
 
+!!! note "Archive"
+    Historical document, kept for background. It describes the situation at
+    the time it was written and may be outdated; the current documentation is
+    under *Working with*, *Setup* and *Configuration*.
+
 ## Executive Summary
 
 The React frontend (`moodle-provisioner-frontend`) is a **fully mocked UI prototype** — it has no real API calls. Every action (create, start, stop, delete) manipulates in-memory React state with `useState`. The Python backend has a solid domain layer but only exposes a CLI interface (via `fire`). The GUI entry point (`gui.py`) throws `UserInterfaceNotYetImplemented`.

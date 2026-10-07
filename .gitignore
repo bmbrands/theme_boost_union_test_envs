@@ -125,4 +125,6 @@ moodle-provisioner-frontend
 
 .opencode
 openspec/
-docs/*
+# Private notes kept next to the docs but never published (server shell
+# histories, quotations, ...)
+docs/archive/private/
