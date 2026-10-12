@@ -68,7 +68,8 @@ The navigation lives in `mkdocs.yml`.
 
 ## Commit, push, release
 
-Both repositories work directly on the `production` branch.
+New work goes on the `phase2` branch of both repositories; fixes for the
+live system go on `production` and are cherry-picked onto `phase2`.
 
 1. **Frontend:** the built `dist/` is committed. Run `npm run build` before
    committing so `dist/` matches `src/`, then commit and push:

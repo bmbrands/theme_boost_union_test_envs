@@ -119,7 +119,23 @@ backend renders: nginx vhosts (`nucky_production_nginx.conf`,
 (`moodle_nginx.conf`), the moodle-docker overrides (`local.yml`, `.env`
 values, `apache-prefix.conf`) and the overview page (`index.html.j2`).
 
-!!! note
-    `local.yml` and the other moodle-docker templates are copied into
-    `example_pwd/.moodle-docker/` once, by `init`. After changing them, copy
-    them there again (see [Setup: Plesk → troubleshooting](../setup/production.md#troubleshooting-from-the-original-installation)).
+`local.yml` and `php-moodle.ini` are rendered per environment directly from
+these templates. Every environment gets `php-moodle.ini` mounted into the
+webserver's PHP configuration (currently `zend.exception_ignore_args = On`,
+which Moodle 5.3+ recommends and the PHP images leave off).
+
+## New Moodle releases
+
+1. Add the release to `moodle-versions-to-supported-php-versions.yaml` (PHP
+   requirements: Moodle's `public/admin/environment.xml` or
+   [moodledev.io](https://moodledev.io/general/development/policies/php)).
+2. Update the moodle-docker clone in the working directory, which provides
+   the compose files (database versions etc.) for new environments:
+   ```bash
+   cd example_pwd/.moodle-docker && git pull --ff-only origin main
+   ```
+   Moodle 5.3, for example, needs PostgreSQL 17, which moodle-docker uses
+   from `f4c2324` on. Existing environments keep their own copy and are not
+   affected.
+3. Create a test environment with the new version and check Moodle's
+   environment page.

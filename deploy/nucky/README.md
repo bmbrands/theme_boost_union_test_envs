@@ -13,7 +13,7 @@ public via ngrok). Full documentation:
 | `boost-union-api.env.example` | template for `/etc/boost-union-api.env` (secrets, not in git) |
 | `mailhog/docker-compose.yml` | MailHog test mail catcher (container `mailhog`) |
 
-Deploy after pushing to `production`:
+nucky runs the `phase2` branch. Deploy after pushing to `phase2`:
 
 ```bash
 ssh root@192.168.2.17 /opt/boost-union-envs/deploy.sh all

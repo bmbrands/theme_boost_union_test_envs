@@ -1,7 +1,7 @@
 # Working with: nucky (acceptance)
 
-nucky runs the `production` branch so changes can be accepted before they go
-to the Plesk server. How it is set up: [Setup: nucky](../setup/acceptance.md).
+nucky runs the `phase2` branch so changes can be accepted before they go
+to the Plesk server (which runs `production`). How it is set up: [Setup: nucky](../setup/acceptance.md).
 
 | | |
 |:--|:--|
@@ -12,7 +12,7 @@ to the Plesk server. How it is set up: [Setup: nucky](../setup/acceptance.md).
 
 ## Deploy
 
-After pushing to `production` (see [Working with: local](dev.md#commit-push-release)):
+After pushing to `phase2` (see [Working with: local](dev.md#commit-push-release)):
 
 ```bash
 ssh root@192.168.2.17 /opt/boost-union-envs/deploy.sh all        # or: backend | frontend

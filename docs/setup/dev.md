@@ -6,11 +6,11 @@ create it from scratch. For daily use see [Working with: local](../working/dev.m
 ## Layout
 
 ```
-~/www/theme_boost_union_test_envs/          backend repo  (branch production)
+~/www/theme_boost_union_test_envs/          backend repo  (branch phase2 or production)
 ├── config.yml                              environment: "env.local.yml"
 ├── env.local.yml                           proxied: no, base_url: localhost
 ├── example_pwd/                            working directory (not in git)
-└── moodle-provisioner-frontend/            frontend repo (branch production,
+└── moodle-provisioner-frontend/            frontend repo (same branch,
                                             ignored by the backend repo)
 ```
 
@@ -23,7 +23,7 @@ create it from scratch. For daily use see [Working with: local](../working/dev.m
 | Reaper / cron | not scheduled; run by hand | — |
 
 Both repositories use the `origin` remote on `git@github.com:bmbrands/…` and the
-`production` branch.
+`phase2` branch for new work, `production` for fixes to the live system (see [branches](../index.md#three-locations)).
 
 ## Prerequisites
 
@@ -37,9 +37,9 @@ Both repositories use the `origin` remote on `git@github.com:bmbrands/…` and t
 
 ```bash
 mkdir -p ~/www && cd ~/www
-git clone --branch production git@github.com:bmbrands/theme_boost_union_test_envs.git
+git clone --branch phase2 git@github.com:bmbrands/theme_boost_union_test_envs.git
 cd theme_boost_union_test_envs
-git clone --branch production git@github.com:bmbrands/moodle-provisioner-frontend.git
+git clone --branch phase2 git@github.com:bmbrands/moodle-provisioner-frontend.git
 ```
 
 ### 2. Python environment

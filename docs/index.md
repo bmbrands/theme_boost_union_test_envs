@@ -21,14 +21,21 @@ See [Architecture](reference/architecture.md) for how they fit together.
 
 | | Local (dev) | nucky (acceptance) | Plesk (production) |
 |:--|:--|:--|:--|
-| Purpose | Development on your own machine | Acceptance testing of the `production` branch before it goes live | The live system used by testers |
+| Purpose | Development on your own machine | Acceptance testing of the next release (`phase2` branch) before it goes live | The live system used by testers |
 | Host | your Mac | `nucky`, `root@192.168.2.17` (LAN) | `testsystem.moodle-an-hochschulen.de` |
 | Public URL | `http://127.0.0.1:5173` | `https://catachrestic-francoise-indomitably.ngrok-free.dev` (ngrok) | `https://testsystem.moodle-an-hochschulen.de` |
 | Environment file | `env.local.yml` | `env.nucky.yml` | `env.prod.yml` |
 | Moodle URLs | `http://localhost:<port>` | `https://<host>/<env>/<version>/` | `https://<host>/<env>/<version>/` |
 
-Code moves in one direction: **local → push `production` → deploy on nucky →
-accept → deploy on Plesk**.
+Branches:
+
+- **`production`** — what runs on Plesk. Only fixes for the live system go
+  here (e.g. Moodle 5.3 support).
+- **`phase2`** — the next release (work packages 3–5: user management,
+  lifecycle automation, email, …). Developed locally, deployed on nucky,
+  merged into `production` after acceptance.
+
+Fixes made on `production` are also cherry-picked onto `phase2`.
 
 ## Where to go next
 

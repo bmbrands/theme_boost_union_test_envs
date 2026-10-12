@@ -80,7 +80,7 @@ and [Moodle 5.x](../reference/moodle5.md).
 
 Work packages 3 and 5 run on nucky. To enable them on Plesk:
 
-1. Deploy the current `production` branch (backend and frontend).
+1. Merge `phase2` into `production` and deploy it (backend and frontend).
 2. Prefer `BOOST_UNION_ENV` over a locally edited `config.yml`: add
    `Environment=BOOST_UNION_ENV=env.prod.yml` to the unit, `systemctl
    daemon-reload && systemctl restart boost-union-api`, then
@@ -128,6 +128,8 @@ sudo nginx -t && sudo nginx -s reload
 ```
 
 **New instances 404 inside the container (stale `.moodle-docker/local.yml`)** —
+(fixed since Moodle 5.3 support: `local.yml` is now rendered from the package
+template; only relevant for environments built before that)
 the per-instance `local.yml` is rendered from the copy in
 `example_pwd/.moodle-docker/`, which is seeded only once by `init`. After
 template changes, re-seed it and rebuild affected instances:

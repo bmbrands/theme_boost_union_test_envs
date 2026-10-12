@@ -10,7 +10,7 @@ scratch. For daily use see [Working with: nucky](../working/acceptance.md).
 | Host | `nucky`, Intel NUC, Debian 13, `ssh root@192.168.2.17` (LAN) |
 | Public URL | `https://catachrestic-francoise-indomitably.ngrok-free.dev` (ngrok → port 80) |
 | Environment file | `env.nucky.yml`, selected with `BOOST_UNION_ENV=env.nucky.yml` |
-| Branch | `production` of both repositories (cloned over HTTPS, read-only) |
+| Branch | `phase2` of both repositories (cloned over HTTPS, read-only) |
 | Server config in git | [`deploy/nucky/`](https://github.com/bmbrands/theme_boost_union_test_envs/tree/production/deploy/nucky) |
 
 ```
@@ -23,10 +23,10 @@ Internet ──► ngrok (screen session) ──► nginx :80 ─┬─ /       
 
 ```
 /opt/boost-union-envs/
-├── backend/            git clone theme_boost_union_test_envs (production)
+├── backend/            git clone theme_boost_union_test_envs (phase2)
 │   ├── deploy/nucky/   deploy.sh, systemd unit, cron, MailHog compose
 │   └── example_pwd/    working directory (live state, not in git)
-├── frontend/           git clone moodle-provisioner-frontend (production)
+├── frontend/           git clone moodle-provisioner-frontend (phase2)
 │   └── dist/           built SPA (rebuilt on every deploy)
 ├── venv/               Python virtualenv used by the service and cron
 ├── deploy.sh           → symlink to backend/deploy/nucky/deploy.sh
@@ -80,8 +80,8 @@ systemctl disable --now apache2 2>/dev/null || true     # nginx owns port 80
 
 ```bash
 mkdir -p /opt/boost-union-envs && cd /opt/boost-union-envs
-git clone --branch production https://github.com/bmbrands/theme_boost_union_test_envs.git backend
-git clone --branch production https://github.com/bmbrands/moodle-provisioner-frontend.git frontend
+git clone --branch phase2 https://github.com/bmbrands/theme_boost_union_test_envs.git backend
+git clone --branch phase2 https://github.com/bmbrands/moodle-provisioner-frontend.git frontend
 
 python3 -m venv venv
 ./venv/bin/pip install --upgrade pip wheel
