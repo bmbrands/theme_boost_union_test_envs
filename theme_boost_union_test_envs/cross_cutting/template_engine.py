@@ -50,6 +50,16 @@ class TemplateEngine:
         else:
             webroot_prefix = ""
             docroot = "/var/www/html"
+        # PHP settings Moodle recommends but the moodle-php-apache images do
+        # not set (e.g. zend.exception_ignore_args, checked since Moodle 5.3).
+        # Written from the package template, not the .moodle-docker copy, so
+        # existing working directories pick it up without re-seeding.
+        php_ini = template_path / "php-moodle.ini"
+        php_ini.write_text((self.template_path / "php-moodle.ini").read_text())
+        extra_volumes = (
+            '      - "./php-moodle.ini:'
+            '/usr/local/etc/php/conf.d/zz-boost-union-envs.ini:ro"'
+        )
         # When running behind a path-based reverse proxy, also mount an
         # Apache Alias snippet into the container so the prefixed URI
         # resolves to the docroot, and force the runtime
@@ -71,13 +81,14 @@ class TemplateEngine:
             # MOODLE_DOCKER_WEB_PORT empty so the in-container Moodle
             # config does not append the host bind port to wwwroot.
             proxy_overrides = (
+                extra_volumes + "\n"
                 '      - "./apache-prefix.conf:'
                 '/etc/apache2/conf-enabled/moodle-prefix.conf:ro"\n'
                 "    environment:\n"
                 '      MOODLE_DOCKER_WEB_PORT: ""'
             )
         else:
-            proxy_overrides = ""
+            proxy_overrides = extra_volumes
         substitutes = {
             "REPLACE_PLUGIN_SOURCE_PATH": test_environment_base_path
             / plugin_install_path,
@@ -85,7 +96,11 @@ class TemplateEngine:
             "REPLACE_WEBROOT_PREFIX": webroot_prefix,
             "REPLACE_PROXY_OVERRIDES": proxy_overrides,
         }
-        template = Template(docker_customisation_file.read_text())
+        # Render from the package template, not from the copy seeded into
+        # .moodle-docker/ by `init`: that copy is never refreshed, so template
+        # changes (proxy overrides, PHP ini mount) would otherwise not reach
+        # new environments on existing installations.
+        template = Template((self.template_path / "local.yml").read_text())
         # safe_substitute so any stray $-tokens in YAML comments
         # (e.g. references to compose env vars) do not raise KeyError.
         replaced_strings = template.safe_substitute(substitutes)
