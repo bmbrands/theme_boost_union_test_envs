@@ -118,3 +118,7 @@ example_pwd/
 
 # Frontend build artifacts
 moodle-provisioner-frontend
+
+# Claude Code: local preview config and personal settings (skills are shared)
+.claude/launch.json
+.claude/settings.local.json
