@@ -128,3 +128,7 @@ openspec/
 # Private notes kept next to the docs but never published (server shell
 # histories, quotations, ...)
 docs/archive/private/
+
+# Claude Code: local preview config and personal settings (skills are shared)
+.claude/launch.json
+.claude/settings.local.json
