@@ -112,9 +112,15 @@ values:
       hours_before: 24
       subject: …                 # Jinja2 template
       body: …
+  moodle_versions:               # Admin Settings → Moodle versions (PUT /api/moodle/policy)
+    minimum_version: '4.5'       # '' = no minimum
 ```
 
-Meaning of every value: [Lifecycle & email](../reference/lifecycle-and-email.md).
+Meaning of the lifecycle and email values: [Lifecycle & email](../reference/lifecycle-and-email.md).
+`moodle_versions.minimum_version` is the oldest Moodle release that can be
+chosen for new environments and added containers, for every plugin (`4.5`
+includes 4.5.0 and newer). The version list in the UI leaves older releases
+out and the API rejects them; existing environments are not affected.
 Missing sections mean "defaults", and the defaults switch all automation off.
 Other keys under `values` (e.g. `github_webhook_secret`,
 `default_moodle_version`) are left over from an earlier settings mock-up and

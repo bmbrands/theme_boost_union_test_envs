@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 
 from theme_boost_union_test_envs.cross_cutting import yaml_parser
 from theme_boost_union_test_envs.cross_cutting.logger import log
-from theme_boost_union_test_envs.domain import lifecycle
+from theme_boost_union_test_envs.domain import lifecycle, moodle_version_policy
 from theme_boost_union_test_envs.domain.validation import (
     InvalidInputError,
     validate_git_ref,
@@ -92,6 +92,16 @@ def _validate_new(name: str | None, versions: list[str]) -> None:
             validate_moodle_version(version)
     except InvalidInputError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+    minimum = moodle_version_policy.load_minimum_version()
+    too_old = moodle_version_policy.too_old(versions, minimum)
+    if too_old:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Moodle {', '.join(too_old)} is older than the minimum version "
+                f"{minimum} set by the administrator"
+            ),
+        )
 
 
 def _core_action(action: Any, *args: str) -> None:

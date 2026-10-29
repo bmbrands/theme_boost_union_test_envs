@@ -12,9 +12,13 @@ import re
 import time
 
 import httpx
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
 
+from theme_boost_union_test_envs.cross_cutting.logger import log
+from theme_boost_union_test_envs.domain import moodle_version_policy
+
+from ..security import require_settings_admin
 from .plugins import _github_headers
 
 router = APIRouter(prefix="/api/moodle", tags=["moodle"])
@@ -30,6 +34,12 @@ class MoodleVersion(BaseModel):
 
 class MoodleVersionsResponse(BaseModel):
     versions: list[MoodleVersion]
+    # Administrator-set minimum ("" = none); older versions are left out.
+    minimum_version: str = ""
+
+
+class MoodleVersionPolicy(BaseModel):
+    minimum_version: str = Field(default="", pattern=r"^$|^\d{1,2}\.\d{1,2}(\.\d{1,3})?$")
 
 
 _CACHE: dict[str, tuple[float, list[MoodleVersion]]] = {}
@@ -79,11 +89,13 @@ def _fetch_moodle_versions() -> list[MoodleVersion]:
 
 @router.get("/versions", response_model=MoodleVersionsResponse)
 def list_moodle_versions() -> MoodleVersionsResponse:
-    """List all official Moodle release versions (tags of moodle/moodle)."""
+    """List the official Moodle releases (tags of moodle/moodle) that may be
+    used for new environments: all of them, or only those at or above the
+    administrator-set minimum version."""
     now = time.time()
     cached = _CACHE.get("versions")
     if cached and cached[0] > now:
-        return MoodleVersionsResponse(versions=cached[1])
+        return _allowed(cached[1])
 
     try:
         versions = _fetch_moodle_versions()
@@ -93,4 +105,31 @@ def list_moodle_versions() -> MoodleVersionsResponse:
         raise HTTPException(status_code=502, detail=f"GitHub API error: {e}") from e
 
     _CACHE["versions"] = (now + _CACHE_TTL_SECONDS, versions)
-    return MoodleVersionsResponse(versions=versions)
+    return _allowed(versions)
+
+
+def _allowed(versions: list[MoodleVersion]) -> MoodleVersionsResponse:
+    minimum = moodle_version_policy.load_minimum_version()
+    return MoodleVersionsResponse(
+        versions=[v for v in versions if moodle_version_policy.is_allowed(v.version, minimum)],
+        minimum_version=minimum,
+    )
+
+
+@router.get("/policy", response_model=MoodleVersionPolicy)
+def get_version_policy() -> MoodleVersionPolicy:
+    return MoodleVersionPolicy(minimum_version=moodle_version_policy.load_minimum_version())
+
+
+@router.put("/policy", response_model=MoodleVersionPolicy)
+def put_version_policy(
+    payload: MoodleVersionPolicy,
+    user: dict = Depends(require_settings_admin),
+) -> MoodleVersionPolicy:
+    moodle_version_policy.save_minimum_version(payload.minimum_version)
+    log().info(
+        "minimum Moodle version set to {!r} by {}",
+        payload.minimum_version,
+        user.get("email", "?"),
+    )
+    return payload
