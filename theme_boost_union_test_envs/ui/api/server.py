@@ -13,6 +13,7 @@ from .routes import (
     logs_router,
     moodle_router,
     plugins_router,
+    privacy_router,
     settings_router,
     users_router,
 )
@@ -49,6 +50,9 @@ def create_app() -> FastAPI:
     # router requires an authenticated, password-current session.
     protected = [Depends(active_user)]
     app.include_router(auth_router)
+    # Public: the data protection declaration must be readable before login.
+    # Writing it is guarded inside the router.
+    app.include_router(privacy_router)
     app.include_router(infrastructures_router, dependencies=protected)
     app.include_router(plugins_router, dependencies=protected)
     app.include_router(moodle_router, dependencies=protected)

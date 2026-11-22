@@ -104,7 +104,11 @@ Work packages 3 and 5 run on nucky. To enable them on Plesk:
    ```
    then stop and start each running instance (UI) so Docker re-publishes the
    port. Check with `ss -ltnp | grep docker-proxy`: no Moodle port on `0.0.0.0`.
-6. Consider adding `deploy/plesk/` (unit, cron, deploy script, nginx
+6. The data protection page lives at `/privacy` inside the SPA. The web server
+   must serve `index.html` for that path (nucky's nginx does this with
+   `try_files $uri $uri/ /index.html`); check that `https://testsystem.moodle-an-hochschulen.de/privacy`
+   shows the page and not a 404.
+7. Consider adding `deploy/plesk/` (unit, cron, deploy script, nginx
    directives) like `deploy/nucky/`, so the server can be rebuilt from git.
 
 ## Troubleshooting from the original installation

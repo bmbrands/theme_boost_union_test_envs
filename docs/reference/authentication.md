@@ -147,7 +147,10 @@ Some endpoints additionally require a permission:
 | `GET /api/audit`, `GET /api/logs` | `audit:read` |
 | `DELETE /api/audit`, `DELETE /api/logs` | `system:admin` |
 | `POST/PATCH/DELETE /api/plugins` (plugin catalog) | `system:admin` |
-| `PUT /api/settings`, `PUT /api/lifecycle`, `PUT /api/moodle/policy`, everything under `/api/email` | `system:admin` |
+| `PUT /api/settings`, `PUT /api/lifecycle`, `PUT /api/moodle/policy`, `PUT /api/privacy`, everything under `/api/email` | `system:admin` |
+
+`GET /api/privacy` (the data protection declaration) is public: it needs no
+session, so the declaration can be read from the login screen.
 
 `POST /api/audit` is open to every user, but the server records the acting
 user, IP address and user agent from the session and request; values sent by

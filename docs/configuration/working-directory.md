@@ -114,6 +114,10 @@ values:
       body: …
   moodle_versions:               # Admin Settings → Moodle versions (PUT /api/moodle/policy)
     minimum_version: '4.5'       # '' = no minimum
+  privacy:                       # Admin Settings → Privacy        (PUT /api/privacy)
+    html: '<h2>…</h2><p>…</p>'   # sanitized: p, br, strong, em, u, h2, h3, ul, ol, li, a
+    updated_at: '2026-11-22T17:30:58+00:00'
+    updated_by: Jane Doe
 ```
 
 Meaning of the lifecycle and email values: [Lifecycle & email](../reference/lifecycle-and-email.md).
@@ -121,6 +125,11 @@ Meaning of the lifecycle and email values: [Lifecycle & email](../reference/life
 chosen for new environments and added containers, for every plugin (`4.5`
 includes 4.5.0 and newer). The version list in the UI leaves older releases
 out and the API rejects them; existing environments are not affected.
+
+`privacy` holds the data protection declaration shown on the public page
+`/privacy` (linked below the login form and at the bottom of the app). The
+HTML is reduced to the tags listed above on every save; scripts, styles and
+attributes other than safe link targets are removed.
 Missing sections mean "defaults", and the defaults switch all automation off.
 Other keys under `values` (e.g. `github_webhook_secret`,
 `default_moodle_version`) are left over from an earlier settings mock-up and

@@ -19,7 +19,7 @@ from ..security import require_settings_admin
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
 # Sections owned by dedicated routes; never read or written here.
-_OWNED_SECTIONS = ("lifecycle", "email", "moodle_versions")
+_OWNED_SECTIONS = ("lifecycle", "email", "moodle_versions", "privacy")
 
 
 class SettingsResponse(BaseModel):
