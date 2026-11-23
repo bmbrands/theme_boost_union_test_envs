@@ -5,9 +5,9 @@ to the Plesk server (which runs `production`). How it is set up: [Setup: nucky](
 
 | | |
 |:--|:--|
-| SSH | `ssh root@192.168.2.17` (LAN) |
+| SSH | `ssh root@192.168.2.4` (LAN) |
 | Application | `https://catachrestic-francoise-indomitably.ngrok-free.dev` |
-| MailHog (caught email) | `http://192.168.2.17:8025` (LAN only) |
+| MailHog (caught email) | `http://192.168.2.4:8025` (LAN only) |
 | Swagger | `<application URL>/docs` |
 
 ## Deploy
@@ -15,7 +15,7 @@ to the Plesk server (which runs `production`). How it is set up: [Setup: nucky](
 After pushing to `phase2` (see [Working with: local](dev.md#commit-push-release)):
 
 ```bash
-ssh root@192.168.2.17 /opt/boost-union-envs/deploy.sh all        # or: backend | frontend
+ssh root@192.168.2.4 /opt/boost-union-envs/deploy.sh all        # or: backend | frontend
 ```
 
 `deploy.sh` (from `deploy/nucky/`, so it updates itself) does:
@@ -34,7 +34,7 @@ Running environments are not touched by a deploy.
 Everything starts by itself except ngrok:
 
 ```bash
-ssh root@192.168.2.17
+ssh root@192.168.2.4
 screen -S ngrok          # or: screen -r  to re-attach an existing one
 ngrok http 80            # detach with Ctrl-A D
 ```
@@ -66,7 +66,7 @@ tail -f /opt/boost-union-envs/backend/example_pwd/.nginx/*.log 2>/dev/null   # n
 - nucky uses short test values (e.g. 20 minutes runtime, 1 day retention), so
   instances disappear quickly.
 - Email goes to **MailHog** (`127.0.0.1:1025`, security *None*); nothing is
-  delivered. Read it at `http://192.168.2.17:8025`.
+  delivered. Read it at `http://192.168.2.4:8025`.
 
 Preview or force the reaper by hand:
 

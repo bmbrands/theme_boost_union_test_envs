@@ -8,7 +8,7 @@ long, and emails owners before their instance is deleted. Everything is
 | Location | Scheduled? | Email goes to |
 |:--|:--|:--|
 | Local | no, run by hand | local MailHog, if configured |
-| nucky | `/etc/cron.d/boost-union-reap` | MailHog (`http://192.168.2.17:8025`) |
+| nucky | `/etc/cron.d/boost-union-reap` | MailHog (`http://192.168.2.4:8025`) |
 | Plesk | not yet, see [Setup: Plesk](../setup/production.md#bringing-lifecycle-automation-and-email-to-production) | the association's SMTP server |
 
 ## Lifecycle policy

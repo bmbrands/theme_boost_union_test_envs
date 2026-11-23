@@ -7,7 +7,7 @@ scratch. For daily use see [Working with: nucky](../working/acceptance.md).
 
 | | |
 |:--|:--|
-| Host | `nucky`, Intel NUC, Debian 13, `ssh root@192.168.2.17` (LAN) |
+| Host | `nucky`, Intel NUC, Debian 13, `ssh root@192.168.2.4` (LAN) |
 | Public URL | `https://catachrestic-francoise-indomitably.ngrok-free.dev` (ngrok → port 80) |
 | Environment file | `env.nucky.yml`, selected with `BOOST_UNION_ENV=env.nucky.yml` |
 | Branch | `phase2` of both repositories (cloned over HTTPS, read-only) |
@@ -41,7 +41,7 @@ Internet ──► ngrok (screen session) ──► nginx :80 ─┬─ /       
 | `nginx` | Debian package; vhost `/etc/nginx/sites-enabled/boost-union` | yes |
 | `docker` | Docker CE (official repo) | yes |
 | `cron` | reaper every 15 min via `/etc/cron.d/boost-union-reap` (from `deploy/nucky/`) | yes |
-| MailHog | Docker container `mailhog` (from `deploy/nucky/mailhog/`), SMTP `127.0.0.1:1025`, UI `http://192.168.2.17:8025` | yes (`restart: unless-stopped`) |
+| MailHog | Docker container `mailhog` (from `deploy/nucky/mailhog/`), SMTP `127.0.0.1:1025`, UI `http://192.168.2.4:8025` | yes (`restart: unless-stopped`) |
 | ngrok | `ngrok http 80`, started by hand in a `screen` session | **no** |
 
 ## Files outside `/opt`

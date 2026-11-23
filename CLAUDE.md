@@ -28,14 +28,14 @@ Remote: `origin` = `git@github.com:bmbrands/…` only (both repos).
 
 | | Local (dev) | nucky (acceptance) | Plesk (production) |
 |:--|:--|:--|:--|
-| Access | this Mac | `ssh root@192.168.2.17` | `ssh bas@244.184.205.92.host.secureserver.net` (key; `sudo` needs a password → the user runs root steps) |
+| Access | this Mac | `ssh root@192.168.2.4` | `ssh bas@244.184.205.92.host.secureserver.net` (key; `sudo` needs a password → the user runs root steps) |
 | URL | `http://127.0.0.1:5173` | `https://catachrestic-francoise-indomitably.ngrok-free.dev` | `https://testsystem.moodle-an-hochschulen.de` |
 | Branch | either | `phase2` | `production` |
 | Env file | `env.local.yml` | `env.nucky.yml` via `BOOST_UNION_ENV` | `env.prod.yml` via edited `config.yml` |
-| Deploy | — | `ssh root@192.168.2.17 /opt/boost-union-envs/deploy.sh all` | manual, see `docs/working/production.md` |
+| Deploy | — | `ssh root@192.168.2.4 /opt/boost-union-envs/deploy.sh all` | manual, see `docs/working/production.md` |
 
 nucky: ngrok must be started by hand in `screen` after a reboot; MailHog UI
-`http://192.168.2.17:8025`; server config lives in `deploy/nucky/`.
+`http://192.168.2.4:8025`; server config lives in `deploy/nucky/`.
 Plesk repos are owned by `boost-union-testing`; read them with
 `git -c safe.directory=* -C …`.
 

@@ -1,6 +1,6 @@
 # nucky (acceptance server) deployment files
 
-Source of truth for the server configuration of nucky (`root@192.168.2.17`,
+Source of truth for the server configuration of nucky (`root@192.168.2.4`,
 public via ngrok). Full documentation:
 [Setup: nucky](../../docs/setup/acceptance.md) and
 [Working with: nucky](../../docs/working/acceptance.md).
@@ -16,5 +16,5 @@ public via ngrok). Full documentation:
 nucky runs the `phase2` branch. Deploy after pushing to `phase2`:
 
 ```bash
-ssh root@192.168.2.17 /opt/boost-union-envs/deploy.sh all
+ssh root@192.168.2.4 /opt/boost-union-envs/deploy.sh all
 ```

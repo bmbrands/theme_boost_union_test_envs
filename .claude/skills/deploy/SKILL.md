@@ -10,7 +10,7 @@ Always commit and push first. Run `ssh` with the sandbox disabled.
 ## nucky (acceptance, branch `phase2`)
 
 ```bash
-ssh root@192.168.2.17 /opt/boost-union-envs/deploy.sh all      # or backend | frontend
+ssh root@192.168.2.4 /opt/boost-union-envs/deploy.sh all      # or backend | frontend
 ```
 
 `deploy.sh` pulls (`--ff-only`), installs the systemd unit / cron file from
@@ -20,7 +20,7 @@ frontend (it discards the previous local `dist/` build first).
 Verify:
 
 ```bash
-ssh root@192.168.2.17 'systemctl is-active boost-union-api nginx docker cron;
+ssh root@192.168.2.4 'systemctl is-active boost-union-api nginx docker cron;
   git -C /opt/boost-union-envs/backend log --oneline -1; git -C /opt/boost-union-envs/frontend log --oneline -1;
   curl -s -o /dev/null -w "api %{http_code}\n" http://127.0.0.1:8000/api/auth/me;   # 401 = up
   cd /opt/boost-union-envs/backend && BOOST_UNION_ENV=env.nucky.yml /opt/boost-union-envs/venv/bin/python scripts/reap_instances.py --dry-run'

@@ -22,7 +22,7 @@ See [Architecture](reference/architecture.md) for how they fit together.
 | | Local (dev) | nucky (acceptance) | Plesk (production) |
 |:--|:--|:--|:--|
 | Purpose | Development on your own machine | Acceptance testing of the next release (`phase2` branch) before it goes live | The live system used by testers |
-| Host | your Mac | `nucky`, `root@192.168.2.17` (LAN) | `testsystem.moodle-an-hochschulen.de` |
+| Host | your Mac | `nucky`, `root@192.168.2.4` (LAN) | `testsystem.moodle-an-hochschulen.de` |
 | Public URL | `http://127.0.0.1:5173` | `https://catachrestic-francoise-indomitably.ngrok-free.dev` (ngrok) | `https://testsystem.moodle-an-hochschulen.de` |
 | Environment file | `env.local.yml` | `env.nucky.yml` | `env.prod.yml` |
 | Moodle URLs | `http://localhost:<port>` | `https://<host>/<env>/<version>/` | `https://<host>/<env>/<version>/` |
