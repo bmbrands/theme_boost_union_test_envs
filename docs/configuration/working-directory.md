@@ -127,7 +127,8 @@ includes 4.5.0 and newer). The version list in the UI leaves older releases
 out and the API rejects them; existing environments are not affected.
 
 `privacy` holds the data protection declaration shown on the public page
-`/privacy` (linked below the login form and at the bottom of the app). The
+`/?privacy` (linked below the login form and at the bottom of the app; a
+query string, so no web server configuration is needed). The
 HTML is reduced to the tags listed above on every save; scripts, styles and
 attributes other than safe link targets are removed.
 Missing sections mean "defaults", and the defaults switch all automation off.
